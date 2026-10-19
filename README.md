@@ -13,6 +13,10 @@
 
 ## 做出來長什麼樣
 
+![預覽頁首屏](docs/screenshot-overview.png)
+
+![框選文字留評論，右側是評論清單](docs/screenshot-comments.png)
+
 - 暖灰底色上一張白色內容頁，左邊有可收合的目錄，手機上也能看。
 - 文字不會一整片：Claude 會把內容改寫成白話，並用圖像元件呈現，例如「現在 → 改完後」對照、系統架構圖、時間軸、步驟、數字卡、方案卡片、彩色重點框。
 - 右上角工具列有「你是誰」選單、評論數、側欄、複製全部、清空。
@@ -26,7 +30,7 @@
 
 打開 Claude 桌面版的 **Code** 分頁，貼上這句話：
 
-> 幫我從這個網址安裝技能：https://github.com/<帳號>/<repo 名稱>
+> 幫我從這個網址安裝技能：https://github.com/kevin8656/claude-skill-preview
 > 把裡面的 preview 資料夾放到 ~/.claude/skills/ 底下。
 
 Claude 會幫你下載並放到正確位置。裝好後**開一個新對話**，技能才會生效。
