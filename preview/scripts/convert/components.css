@@ -1,0 +1,262 @@
+/* 流程與表格共用既定色票，不介入預覽頁外殼。 */
+.pv-flow, .pv-table-wrap {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  color: var(--pv-ink);
+  font-family: var(--pv-font-sans);
+}
+.pv-flow *, .pv-table-wrap * { box-sizing: border-box; }
+.pv-flow { margin: 24px 0; font-size: var(--pv-body-size); }
+.pv-flow .pv-flow-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 24px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+/* 多站列用等寬格線：換行後每列卡片同寬，不會出現第二列被拉寬。
+   換行後行首那張卡左側的箭頭會凸出內容左緣，用水平方向的 clip-path 裁掉，讓流程卡跟文字同一條左邊（插圖不能超出對齊）；
+   上下保留空間給列與列之間的往下箭頭。順序靠卡片由左到右、由上到下的閱讀方向與代號表達。 */
+.pv-flow .pv-flow-row:not(.pv-flow-row--single) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(136px, 1fr));
+  gap: 16px 24px;
+  clip-path: inset(-48px 0 -48px 0);
+}
+.pv-flow .pv-flow-step {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex: 1 1 130px;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 12px;
+  background: var(--pv-card);
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  box-shadow: var(--pv-shadow);
+}
+.pv-flow-label, .pv-flow-cond, .pv-flow-desc, .pv-flow-note { overflow-wrap: anywhere; }
+.pv-flow .pv-flow-code {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  color: var(--pv-accent);
+  background: var(--pv-pill-bg);
+  font-size: var(--pv-pill-size);
+  font-family: var(--pv-font-mono);
+  border-radius: var(--pv-radius);
+}
+/* 箭頭由框線構成，不新增可被評論索引擷取的文字。 */
+.pv-flow-step + .pv-flow-step::before {
+  content: "";
+  position: absolute;
+  left: -21px;
+  top: 50%;
+  width: 14px;
+  border-top: 1px solid var(--pv-muted);
+}
+.pv-flow-step + .pv-flow-step::after {
+  content: "";
+  position: absolute;
+  left: -11px;
+  top: calc(50% - 3px);
+  width: 6px;
+  height: 6px;
+  border-top: 1px solid var(--pv-muted);
+  border-right: 1px solid var(--pv-muted);
+  transform: rotate(45deg);
+}
+.pv-flow .pv-flow-row--single { justify-content: center; }
+.pv-flow-row--single .pv-flow-step { flex: 0 1 320px; }
+.pv-flow > .pv-flow-row + .pv-flow-row,
+.pv-flow > .pv-flow-branches {
+  position: relative;
+  margin-top: 32px;
+}
+.pv-flow > .pv-flow-row + .pv-flow-row::before,
+.pv-flow > .pv-flow-branches::before {
+  content: "";
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  height: 18px;
+  border-left: 1px solid var(--pv-muted);
+}
+.pv-flow > .pv-flow-row + .pv-flow-row::after,
+.pv-flow > .pv-flow-branches::after {
+  content: "";
+  position: absolute;
+  top: -14px;
+  left: calc(50% - 3px);
+  width: 6px;
+  height: 6px;
+  border-bottom: 1px solid var(--pv-muted);
+  border-right: 1px solid var(--pv-muted);
+  transform: rotate(45deg);
+}
+.pv-flow .pv-flow-branches {
+  display: grid;
+  grid-template-columns: repeat(var(--pv-flow-cols), minmax(0, 1fr));
+  gap: 12px;
+}
+.pv-flow-branch {
+  min-width: 0;
+  padding: 14px;
+  background: var(--pv-card);
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+  box-shadow: var(--pv-shadow);
+}
+.pv-flow-cond { font-weight: 600; }
+.pv-flow-branch .pv-flow-row { margin-top: 8px; }
+.pv-flow-branch .pv-flow-step {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.pv-flow-desc { margin-top: 8px; font-size: var(--pv-small-size); }
+.pv-flow .pv-flow-note {
+  margin: 16px 0 0;
+  text-align: center;
+  color: var(--pv-muted);
+  font-size: var(--pv-small-size);
+}
+.pv-table-wrap {
+  overflow-x: auto;
+  margin: 20px 0;
+  border: 1px solid var(--pv-line);
+  border-radius: var(--pv-radius);
+}
+.pv-table-wrap .pv-table {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: var(--pv-table-size);
+  line-height: var(--pv-table-leading);
+}
+.pv-table th, .pv-table td {
+  padding: 12px 14px;
+  text-align: left;
+  vertical-align: top;
+  line-height: var(--pv-table-leading);
+  color: var(--pv-ink);
+  border: 0;
+  border-bottom: 1px solid var(--pv-line);
+  overflow-wrap: anywhere;
+}
+.pv-table th { background: var(--pv-canvas); font-weight: 600; white-space: nowrap; }
+.pv-table th, .pv-table td { min-width: 5em; }
+.pv-table .pv-nowrap { white-space: nowrap; min-width: 0; }
+.pv-table tbody tr { background: var(--pv-card); }
+.pv-table tbody tr:last-child td { border-bottom: 0; }
+@media (max-width: 640px) {
+  .pv-flow .pv-flow-row,
+  .pv-flow .pv-flow-row:not(.pv-flow-row--single) { display: flex; flex-direction: column; flex-wrap: nowrap; gap: 24px; }
+  .pv-flow .pv-flow-step { flex: 0 1 auto; width: 100%; }
+  .pv-flow-step + .pv-flow-step::before {
+    top: -21px;
+    left: 50%;
+    width: 0;
+    height: 14px;
+    border-top: 0;
+    border-left: 1px solid var(--pv-muted);
+  }
+  .pv-flow-step + .pv-flow-step::after {
+    top: -13px;
+    left: calc(50% - 3px);
+    transform: rotate(135deg);
+  }
+  .pv-flow .pv-flow-branches { grid-template-columns: minmax(0, 1fr); }
+  .pv-table-wrap { border: 0; border-radius: 0; overflow-x: visible; }
+  .pv-table-wrap .pv-table { display: block; min-width: 0; width: 100%; }
+  .pv-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  .pv-table tbody { display: block; width: 100%; }
+  .pv-table tbody tr {
+    display: block;
+    margin-bottom: 12px;
+    border: 1px solid var(--pv-line);
+    border-radius: var(--pv-radius);
+    box-shadow: var(--pv-shadow);
+    background: var(--pv-card);
+    overflow: hidden;
+  }
+  .pv-table tbody tr td {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .pv-table tbody tr td { padding: 6px 14px; }
+  .pv-table tbody tr td:first-child { padding-top: 12px; }
+  .pv-table td.pv-card-title { font-weight: 600; }
+  .pv-table td.pv-short[data-label]::before { display: inline; margin: 0 8px 0 0; }
+  /* 卡片標題不顯示小標：選擇器權重要跟上一條 pv-short 一樣高、放在它後面，否則短標題（例如「R0」）會被加回「#」小標 */
+  .pv-table td.pv-card-title[data-label]::before { display: none; }
+  .pv-table tbody tr td:last-child { padding-bottom: 12px; }
+  .pv-table tbody tr td:empty { display: none; }
+  .pv-table td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 2px;
+    color: var(--pv-muted);
+    font-size: var(--pv-pill-size);
+    font-weight: 600;
+  }
+}
+
+
+/* 摺疊段落（--fold，長頁專用）：標題整條可點，收起時只剩一行 */
+.pv-fold { border-top: 1px solid var(--pv-border, #e6e3dc); }
+.pv-fold > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: .55rem;
+  padding: .15rem .5rem; border-radius: .5rem;
+}
+.pv-fold > summary::-webkit-details-marker { display: none; }
+.pv-fold > summary::before {
+  content: ""; flex: 0 0 auto;
+  border: .34rem solid transparent; border-left-color: var(--pv-muted, #8a8579);
+  transform-origin: .17rem 50%; transition: transform .15s ease;
+}
+.pv-fold[open] > summary::before { transform: rotate(90deg); }
+.pv-fold > summary:hover { background: var(--pv-surface-2, #f4f1ea); }
+.pv-fold > summary > h2, .pv-fold > summary > h3,
+.pv-fold > summary > h4, .pv-fold > summary > h5 { margin: .35rem 0; flex: 1 1 auto; }
+.pv-fold-flag {
+  flex: 0 0 auto; font-size: .8rem; font-weight: 600; letter-spacing: .02em;
+  color: var(--pv-muted, #8a8579); border: 1px solid var(--pv-border, #e6e3dc);
+  border-radius: 999px; padding: .1rem .55rem; white-space: nowrap;
+}
+.pv-fold-flag[data-done="1"] { color: #2f6f4f; border-color: #bcd9c8; background: #eef7f1; }
+.pv-fold[open] > summary { margin-bottom: .25rem; }
+.pv-fold-body { padding-left: 1.5rem; }
+.pv-fold .pv-fold { border-top: 1px dashed var(--pv-border, #e6e3dc); }
+@media (max-width: 640px) { .pv-fold-body { padding-left: .6rem; } }
+
+.pv-foldbar { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; margin: .5rem 0 0; }
+.pv-foldbar button {
+  font: inherit; font-weight: 600; cursor: pointer; padding: .35rem .85rem;
+  border: 1px solid var(--pv-border, #e6e3dc); border-radius: 999px;
+  background: var(--pv-surface, #fff); color: var(--pv-ink, #23201b);
+}
+.pv-foldbar button:hover { background: var(--pv-surface-2, #f4f1ea); }
+.pv-foldbar span { color: var(--pv-muted, #8a8579); font-size: .875rem; }

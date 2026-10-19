@@ -1,0 +1,826 @@
+<!--
+  preview-comment-overlay.html  ·  框選評論 overlay（可重用模組）
+  ───────────────────────────────────────────────────────────────
+  用法：把整段（這個註解以下的 <style> + markup + <script>）貼到任何 HTML 的
+  </body> 之前。在它「之前」放一段設定：
+
+    <script>
+      window.PREVIEW_CONFIG = {
+        storageKey: 'pc_<頁面唯一名>',        // 每頁不同，避免評論互相污染
+        identities: ['我', '訪客'],             // 身份選擇器選項，第一個為預設
+        title: '這份文件的標題',                // 匯出 markdown 標頭用
+        contentSelector: 'body',               // 可框選評論的內容範圍（預設整頁）
+        onBeforeScroll: null                   // function(node)：捲到某評論前先做的事（例如切換分頁）
+      };
+    </script>
+
+  特性：框選任意文字加評論、選擇自己是誰、CSS Highlight API 零 DOM 變動高亮、
+  localStorage 持久化、側欄列表、一鍵複製（markdown）、一鍵清空、桌機+手機。
+-->
+<style>
+  /* pv-tokens:start */
+.pc-overlay-root{
+  /* 色 */
+  --pv-canvas:#F7F6F3;
+  --pv-card:#FFFFFF;
+  --pv-line:#E6E4DE;
+  --pv-ink:#1F2328;
+  --pv-muted:#6B6F76;
+  --pv-accent:#1F3A5F;
+  --pv-accent-soft:rgba(31,58,95,.08);
+  --pv-pill-bg:#EFEEEA;
+  --pv-danger:#9F2F2D;
+  --pv-hl:rgba(255,206,84,.45);
+  --pv-hl-active:rgba(255,159,67,.6);
+  /* 字 */
+  --pv-font-sans:'Noto Sans TC','Geist',system-ui,sans-serif;
+  --pv-font-mono:'Geist Mono','Noto Sans TC',ui-monospace,monospace;
+  --pv-h1-size:32px; --pv-h1-weight:700; --pv-h1-tracking:-0.01em; --pv-h1-leading:1.3;
+  --pv-h2-size:22px; --pv-h2-weight:700; --pv-h2-space-above:48px; --pv-h2-space-below:12px;
+  --pv-h3-size:17px; --pv-h3-weight:600;
+  --pv-body-size:16px; --pv-body-leading:1.8; --pv-para-gap:14px;
+  --pv-table-size:14.5px; --pv-table-leading:1.6;
+  --pv-code-size:13.5px;
+  --pv-small-size:13px;
+  --pv-pill-size:12px;
+  /* 間距與形；陰影透明度一律不超過 0.05 */
+  --pv-content-w:760px;
+  --pv-content-w-wide:920px;
+  --pv-radius:8px;
+  --pv-shadow:0 1px 2px rgba(31,35,40,.04),0 4px 12px rgba(31,35,40,.05);
+  --pv-quote-rule:3px;
+  /* 工具列與側欄 */
+  --pv-bar-h:52px;
+  --pv-btn-size:14px; --pv-btn-radius:8px; --pv-btn-h:34px;
+  --pv-side-w:360px;
+  /* 斷點只當文件：手機 640px，CSS 變數不能用在 media query。 */
+}
+/* pv-tokens:end */
+
+  ::highlight(pc-comment){ background-color: rgba(255,206,84,.45); }
+  ::highlight(pc-active){ background-color: rgba(255,159,67,.6); }
+
+  .pc-overlay-root *{ box-sizing:border-box; }
+  /* 🚨 position 必須是 static：.pc-fab 是 absolute，會以最近的 positioned 祖先當原點，
+     而它的 top 是用 window.scrollY 算的絕對座標。宿主頁面只要有 `body>*{position:relative}`
+     這類規則（銷售頁為了把內容壓在背景層之上很常寫），這個容器就變成基準，
+     浮鈕會被推到「容器位置 ＋ scrollY」的地方，實測跑到 y=12964，等於框了字卻看不到按鈕。
+     實際在銷售頁踩過。 */
+  .pc-overlay-root{ font-family:var(--pv-font-sans); position:static !important; }
+  .pc-overlay-root button, .pc-overlay-root select{ font-family:inherit; }
+  .pc-overlay-root button:focus-visible, .pc-overlay-root select:focus-visible{
+    outline:2px solid var(--pv-accent); outline-offset:1px; }
+
+  /* --pco-bar-h 定在 html 上：.pc-overlay-root 才有 --pv-* 範圍變數，
+     宿主頁面其他 sticky 元件在 .pc-overlay-root 之外也要讀得到工具列高度，所以用全域字面值。 */
+  html{ --pco-bar-h:52px; }
+  body{ padding-top:var(--pco-bar-h); }
+
+  /* 頂部工具列 */
+  .pc-bar{ position:fixed; top:0; left:0; right:0; height:var(--pv-bar-h); z-index:9000;
+    background:var(--pv-card); color:var(--pv-ink); display:flex; align-items:center;
+    gap:10px; padding:0 14px; font-size:14px; border-bottom:1px solid var(--pv-line); }
+  .pc-bar .pc-id-wrap{ display:flex; align-items:center; gap:6px; }
+  .pc-bar .pc-spacer{ flex:1; }
+  .pc-bar button, .pc-bar .pc-count, .pc-bar select{
+    height:var(--pv-btn-h); font-size:14px; border-radius:var(--pv-btn-radius);
+    border:1px solid var(--pv-line); background:var(--pv-card); color:var(--pv-ink);
+    padding:0 12px; cursor:pointer; transition:background .15s, color .15s; line-height:1.2; }
+  .pc-bar button:hover, .pc-bar select:hover{ background:var(--pv-accent-soft); }
+  .pc-bar .pc-clear:hover{ color:var(--pv-danger); }
+  .pc-bar .pc-count{ color:var(--pv-ink); background:var(--pv-pill-bg); border-color:transparent; cursor:default; display:inline-flex; align-items:center; }  /* span 不會自己垂直置中；灰底無框＝狀態標籤，不要長得像停用的按鈕*/  /* span 不會自己垂直置中，不補這行字會比旁邊按鈕高一截 */
+
+  /* 浮動「新增評論」按鈕 */
+  .pc-fab{ position:absolute; z-index:10500; background:var(--pv-accent); color:#fff;
+    border:none; border-radius:var(--pv-btn-radius); padding:7px 12px; font-size:14px; cursor:pointer;
+    box-shadow:var(--pv-shadow); display:none; white-space:nowrap; font-family:inherit; }
+  .pc-fab:hover{ opacity:.92; }
+  .pc-fab.show{ display:block; }
+
+  /* 撰寫面板（彈出） */
+  .pc-compose{ position:absolute; z-index:10500; width:300px; max-width:90vw; background:var(--pv-card);
+    border:1px solid var(--pv-line); border-radius:var(--pv-radius); box-shadow:var(--pv-shadow);
+    padding:14px; display:none; font-family:inherit; }
+  .pc-compose.show{ display:block; }
+  .pc-compose .pc-quote{ font-size:13px; color:var(--pv-muted); border-left:3px solid var(--pv-line);
+    padding:4px 8px; margin-bottom:8px; max-height:60px; overflow:auto; }
+  .pc-compose .pc-who{ font-size:12px; color:var(--pv-ink); margin-bottom:6px; }
+  .pc-compose textarea{ width:100%; min-height:72px; border:1px solid var(--pv-line); border-radius:8px;
+    padding:8px; font-size:14px; font-family:inherit; resize:vertical; }
+  .pc-compose textarea:focus{ border-color:var(--pv-accent); outline:none; }
+  .pc-compose .pc-actions{ display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+  .pc-compose .pc-actions button{ border-radius:var(--pv-btn-radius); padding:6px 14px; font-size:13px; cursor:pointer; font-family:inherit; }
+  .pc-save{ background:var(--pv-accent); color:#fff; border:none; }
+  .pc-cancel{ background:var(--pv-card); color:var(--pv-ink); border:1px solid var(--pv-line); }
+
+  /* 右側評論欄 */
+  .pc-panel{ position:fixed; top:var(--pco-bar-h); right:0; bottom:0; width:var(--pv-side-w); max-width:92vw; z-index:10400;
+    background:var(--pv-card); border-left:1px solid var(--pv-line);
+    transform:translateX(100%); transition:transform .22s ease; display:flex; flex-direction:column; }
+  .pc-panel.show{ transform:translateX(0); }
+  .pc-panel .pc-phead{ padding:12px 14px; font-size:14px; font-weight:600; color:var(--pv-ink);
+    border-bottom:1px solid var(--pv-line); display:flex; align-items:center; justify-content:space-between; }
+  .pc-panel .pc-phead .pc-x{ cursor:pointer; color:var(--pv-muted); border:none; background:none; font-size:18px; font-family:inherit; }
+  .pc-panel .pc-phead .pc-x:hover{ color:var(--pv-accent); }
+  .pc-list{ flex:1; overflow:auto; padding:10px; }
+  .pc-empty{ color:var(--pv-muted); font-size:13px; text-align:center; padding:30px 16px; line-height:1.7; }
+  .pc-card{ background:var(--pv-card); border:1px solid var(--pv-line); border-radius:var(--pv-radius); padding:12px;
+    margin-bottom:12px; cursor:pointer; transition:border-color .15s, box-shadow .15s; }
+  .pc-card:hover{ border-color:var(--pv-accent); box-shadow:var(--pv-shadow); }
+  .pc-card.pc-cur{ border-color:var(--pv-accent); background:var(--pv-accent-soft); }
+  .pc-card .pc-meta{ display:flex; align-items:center; gap:7px; margin-bottom:5px; font-size:12px; }
+  .pc-card .pc-author{ font-weight:600; font-size:13px; color:var(--pv-ink); display:inline-flex; align-items:center; gap:6px; }
+  .pc-card .pc-author::before{ content:""; width:8px; height:8px; border-radius:50%; background:var(--pc-au,var(--pv-accent)); flex:0 0 auto; }
+  .pc-card .pc-time{ color:var(--pv-muted); font-size:13px; }
+  .pc-card .pc-detached{ color:var(--pv-danger); font-size:11px; }
+  .pc-card .pc-cquote{ font-size:13.5px; color:var(--pv-muted); border-left:2px solid var(--pv-line); padding:2px 8px;
+    margin-bottom:6px; }
+  .pc-card .pc-ctext{ font-size:14px; color:var(--pv-ink); white-space:pre-wrap; }
+  .pc-card .pc-cbtns{ display:flex; gap:10px; margin-top:7px; }
+  .pc-card .pc-cbtns button{ background:none; border:none; font-size:13px; color:var(--pv-muted); cursor:pointer; padding:0; font-family:inherit; }
+  .pc-card .pc-cbtns button:hover{ color:var(--pv-accent); }
+
+  /* toast + modal */
+  .pc-toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(20px); z-index:9500;
+    background:var(--pv-ink); color:#fff; padding:10px 18px; border-radius:8px; font-size:13px;
+    opacity:0; transition:.25s; pointer-events:none; }
+  .pc-toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .pc-modal{ position:fixed; inset:0; z-index:9600; background:rgba(31,35,40,.4); display:none;
+    align-items:center; justify-content:center; padding:20px; }
+  .pc-modal.show{ display:flex; }
+  .pc-modal .pc-box{ background:var(--pv-card); border-radius:8px; padding:18px; width:560px; max-width:94vw; max-height:80vh; display:flex; flex-direction:column; }
+  .pc-modal h3{ font-size:16px; color:var(--pv-ink); margin:0 0 10px; }
+  .pc-modal-ta{ flex:1; min-height:260px; border:1px solid var(--pv-line); border-radius:8px; padding:10px;
+    font-size:13px; font-family:var(--pv-font-mono); resize:vertical; }
+  .pc-modal .pc-mbtns{ display:flex; gap:8px; justify-content:flex-end; margin-top:10px; }
+  .pc-modal .pc-mbtns button{ border-radius:var(--pv-btn-radius); padding:8px 16px; font-size:13px; cursor:pointer; font-family:inherit; }
+
+  @media(max-width:640px){
+    .pc-panel{ width:100%; }
+    .pc-id-label{ display:none; }
+    .pc-bar{ padding:0 8px; gap:6px; }
+    .pc-bar button, .pc-bar .pc-count, .pc-bar select{ height:32px; font-size:13px; padding:0 8px; }
+  }
+
+  /* 滑鼠指到被評論的文字就直接看內容，不必開側欄 */
+  .pc-peek{ position:fixed; z-index:2147483646; max-width:340px; min-width:220px;
+    background:var(--pv-card); color:var(--pv-ink); border:1px solid var(--pv-line); border-radius:var(--pv-radius);
+    box-shadow:var(--pv-shadow); padding:10px 12px; font-size:13px; line-height:1.7;
+    opacity:0; transform:translateY(4px); pointer-events:none; transition:opacity .12s, transform .12s; }
+  .pc-peek.show{ opacity:1; transform:none; }
+  .pc-peek.pinned{ pointer-events:auto; border-color:var(--pv-accent); }
+  .pc-peek-head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; padding-right:18px; }
+  .pc-peek-author{ font-size:13px; font-weight:600; color:var(--pv-ink); display:inline-flex; align-items:center; gap:6px;
+    white-space:nowrap; flex:0 0 auto; }
+  .pc-peek-author::before{ content:""; width:8px; height:8px; border-radius:50%; background:var(--pc-au,var(--pv-accent)); flex:0 0 auto; }
+  .pc-peek-time{ font-size:12.5px; color:var(--pv-muted); white-space:nowrap; flex:0 0 auto; }
+  .pc-peek-where{ font-size:11px; color:var(--pv-muted); background:var(--pv-pill-bg); padding:1px 7px; border-radius:20px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; flex:1 1 auto; min-width:32px; }
+  .pc-peek-close{ position:absolute; top:5px; right:7px; border:none; background:transparent; cursor:pointer;
+    font-size:17px; line-height:1; color:var(--pv-muted); padding:0 3px; z-index:1; font-family:inherit; }
+  .pc-peek-close:hover{ color:var(--pv-accent); }
+  .pc-peek-q{ font-size:13px; color:var(--pv-muted); border-left:2px solid var(--pv-line); padding:1px 8px;
+    margin-bottom:6px; max-height:3.4em; overflow:hidden; }
+  .pc-peek-body{ white-space:pre-wrap; word-break:break-word; color:var(--pv-ink); }
+  .pc-peek-more{ font-size:11px; color:var(--pv-muted); margin-top:4px; }
+  .pc-peek-btns{ display:none; gap:10px; margin-top:8px; }
+  .pc-peek.pinned .pc-peek-btns{ display:flex; }
+  .pc-peek-btns button{ background:none; border:none; font:inherit; font-size:12px; color:var(--pv-muted); padding:0; cursor:pointer; }
+  .pc-peek-btns button:hover{ color:var(--pv-accent); }
+  /* 側欄依頁面區塊分組 */
+  .pc-group{ margin:0 0 10px; }
+  .pc-ghead{ display:flex; align-items:center; gap:6px; width:100%; text-align:left; cursor:pointer;
+    font:inherit; font-size:12.5px; font-weight:600; color:var(--pv-ink); background:var(--pv-pill-bg);
+    border:none; border-radius:var(--pv-radius); padding:6px 10px; margin-bottom:6px; }
+  .pc-ghead .pc-gn{ margin-left:auto; font-weight:400; color:var(--pv-muted); }
+  .pc-ghead .pc-gcaret{ transition:transform .15s; font-size:9px; line-height:1; }  /* 自帶 Noto 沒有 ▾（U+25BE），改用有收錄的 ▼ 縮小，否則這個字會掉回系統字 */
+  .pc-group.collapsed .pc-gcaret{ transform:rotate(-90deg); }
+  .pc-group.collapsed .pc-gbody{ display:none; }
+</style>
+
+<div class="pc-overlay-root">
+  <div class="pc-bar">
+    <span class="pc-id-wrap"><span class="pc-id-label">你是誰：</span>
+      <select class="pc-id-select" aria-label="選擇身份"></select>
+    </span>
+    <span class="pc-spacer"></span>
+    <span class="pc-count">評論 0</span>
+    <button class="pc-toggle">側欄</button>
+    <button class="pc-copy">複製全部</button>
+    <button class="pc-clear">清空</button>
+  </div>
+
+  <button class="pc-fab">新增評論</button>
+
+  <div class="pc-compose">
+    <div class="pc-quote"></div>
+    <div class="pc-who"></div>
+    <textarea placeholder="寫下你的想法（Cmd/Ctrl + Enter 儲存）"></textarea>
+    <div class="pc-actions">
+      <button class="pc-cancel">取消</button>
+      <button class="pc-save">儲存</button>
+    </div>
+  </div>
+
+  <div class="pc-panel">
+    <div class="pc-phead"><span>評論清單</span><button class="pc-x" title="關閉">×</button></div>
+    <div class="pc-list"></div>
+  </div>
+
+  <div class="pc-peek">
+    <div class="pc-peek-head"><span class="pc-peek-author"></span><span class="pc-peek-time"></span><span class="pc-peek-where"></span><button class="pc-peek-close" title="關閉" aria-label="關閉">×</button></div>
+    <div class="pc-peek-q"></div>
+    <div class="pc-peek-body"></div>
+    <div class="pc-peek-more"></div>
+    <div class="pc-peek-btns">
+      <button data-act="edit">編輯</button>
+      <button data-act="del">刪除</button>
+      <button data-act="panel">在側欄開啟</button>
+    </div>
+  </div>
+
+  <div class="pc-toast"></div>
+
+  <div class="pc-modal">
+    <div class="pc-box">
+      <h3>複製評論</h3>
+      <textarea class="pc-modal-ta" readonly></textarea>
+      <div class="pc-mbtns">
+        <button class="pc-cancel pc-modal-close">關閉</button>
+        <button class="pc-save pc-modal-copy">複製到剪貼簿</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var CFG = Object.assign({
+    storageKey: null, identities: ["我","訪客"], title: document.title || "預覽",
+    contentSelector: "body", onBeforeScroll: null
+  }, window.PREVIEW_CONFIG || {});
+
+  function hash(s){ var h=5381,i=s.length; while(i) h=(h*33)^s.charCodeAt(--i); return (h>>>0).toString(36); }
+  var KEY = CFG.storageKey || ("pc_" + hash((CFG.title||"") + location.pathname));
+  var ID_KEY = KEY + "__who";
+  var PALETTE = ["#2980b9","#b8860b","#27ae60","#8e44ad","#c0392b","#16a085","#d35400","#2c3e50"];
+
+  var root = document.querySelector(".pc-overlay-root");
+  var elBar = root.querySelector(".pc-bar");
+  var elSel = root.querySelector(".pc-id-select");
+  var elCount = root.querySelector(".pc-count");
+  var elFab = root.querySelector(".pc-fab");
+  var elCompose = root.querySelector(".pc-compose");
+  var elQuote = elCompose.querySelector(".pc-quote");
+  var elWho = elCompose.querySelector(".pc-who");
+  var elTa = elCompose.querySelector("textarea");
+  var elPanel = root.querySelector(".pc-panel");
+  var elList = root.querySelector(".pc-list");
+  var elToast = root.querySelector(".pc-toast");
+  var elPeek = root.querySelector(".pc-peek");
+  var elModal = root.querySelector(".pc-modal");
+  var elModalTa = root.querySelector(".pc-modal-ta");
+
+  var comments = load();
+  var pendingRange = null;     // 框選後待儲存的 Range
+  var pendingAnchor = null;    // {quote, contextBefore, contextAfter}
+  var editingId = null;
+  var index = null;            // 文字索引 {fullText, nodes}
+  var supportsHL = (typeof Highlight !== "undefined") && (typeof CSS !== "undefined") && CSS.highlights;
+
+  function load(){ try{ return JSON.parse(localStorage.getItem(KEY)||"[]"); }catch(e){ return []; } }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(comments.map(stripRuntime))); }catch(e){} }
+  function stripRuntime(c){ var o={}; for(var k in c){ if(k.charAt(0)!=="_") o[k]=c[k]; } return o; }
+  function byId(id){ for(var i=0;i<comments.length;i++) if(comments[i].id===id) return comments[i]; return null; }
+  function colorFor(author){ var i=CFG.identities.indexOf(author); if(i<0) i=parseInt(hash(author),36)%PALETTE.length; return PALETTE[i%PALETTE.length]; }
+  function fmtTime(t){ var d=new Date(t); function p(n){return(n<10?"0":"")+n;} return (d.getMonth()+1)+"/"+d.getDate()+" "+p(d.getHours())+":"+p(d.getMinutes()); }
+
+  // ---- 身份選擇器 ----
+  function initIdentity(){
+    elSel.innerHTML = "";
+    CFG.identities.forEach(function(name){
+      var o=document.createElement("option"); o.value=name; o.textContent=name; elSel.appendChild(o);
+    });
+    var saved = localStorage.getItem(ID_KEY);
+    if(saved && CFG.identities.indexOf(saved)>=0) elSel.value=saved;
+    else elSel.value = CFG.identities[0];
+    elSel.addEventListener("change", function(){ localStorage.setItem(ID_KEY, elSel.value); });
+  }
+  function currentWho(){ return elSel.value || CFG.identities[0]; }
+
+  // ---- 文字索引（用來把選取/錨點對應回 DOM）----
+  function contentRoot(){ return document.querySelector(CFG.contentSelector) || document.body; }
+  function buildIndex(){
+    var rootEl = contentRoot();
+    var walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, {
+      acceptNode: function(n){
+        var p=n.parentNode;
+        while(p){
+          if(p.nodeType===1){
+            var tag=p.tagName;
+            if(tag==="SCRIPT"||tag==="STYLE"||tag==="NOSCRIPT") return NodeFilter.FILTER_REJECT;
+            if(p.classList && p.classList.contains("pc-overlay-root")) return NodeFilter.FILTER_REJECT;
+          }
+          p=p.parentNode;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    });
+    var nodes=[], full="", n;
+    while((n=walker.nextNode())){
+      var t=n.nodeValue;
+      nodes.push({node:n, start:full.length, end:full.length+t.length});
+      full+=t;
+    }
+    index={fullText:full, nodes:nodes};
+  }
+  function firstTextIn(node){ if(node.nodeType===3) return node; var w=document.createTreeWalker(node,NodeFilter.SHOW_TEXT); return w.nextNode(); }
+  function lastTextIn(node){ if(node.nodeType===3) return node; var w=document.createTreeWalker(node,NodeFilter.SHOW_TEXT),last=null,n2; while((n2=w.nextNode())) last=n2; return last; }
+  function rangeToGlobal(range){
+    if(!index) buildIndex();
+    var sc=range.startContainer, so=range.startOffset, ec=range.endContainer, eo=range.endOffset;
+    // 容器是元素時，下探到對應的文字節點，避免框選整段/triple-click 落在 element 邊界
+    if(sc.nodeType!==3){ var ts=sc.childNodes[so]?firstTextIn(sc.childNodes[so]):firstTextIn(sc); if(ts){ sc=ts; so=0; } }
+    if(ec.nodeType!==3){ var te; if(eo>0 && ec.childNodes[eo-1]){ te=lastTextIn(ec.childNodes[eo-1]); if(te){ ec=te; eo=te.nodeValue.length; } } else { te=firstTextIn(ec); if(te){ ec=te; eo=0; } } }
+    var s=null, e=null;
+    for(var i=0;i<index.nodes.length;i++){
+      var it=index.nodes[i];
+      if(it.node===sc) s=it.start+so;
+      if(it.node===ec) e=it.start+eo;
+    }
+    if(s===null||e===null||e<=s) return null;
+    return {start:s, end:e};
+  }
+  function globalToRange(start,end){
+    if(!index) buildIndex();
+    var s=null,so=0,en=null,eo=0;
+    for(var i=0;i<index.nodes.length;i++){
+      var it=index.nodes[i];
+      if(s===null && start<it.end){ s=it.node; so=start-it.start; }
+      if(end<=it.end){ en=it.node; eo=end-it.start; break; }
+    }
+    if(!s||!en) return null;
+    try{ var r=document.createRange(); r.setStart(s,Math.max(0,so)); r.setEnd(en,Math.max(0,eo)); return r; }catch(e){ return null; }
+  }
+  function commonSuffix(a,b){ var n=0; while(n<a.length&&n<b.length&&a[a.length-1-n]===b[b.length-1-n]) n++; return n; }
+  function commonPrefix(a,b){ var n=0; while(n<a.length&&n<b.length&&a[n]===b[n]) n++; return n; }
+  function locate(quote,before,after){
+    if(!index) buildIndex();
+    var ft=index.fullText, from=0, best=-1, bestScore=-2;
+    if(!quote) return null;
+    while(true){
+      var i=ft.indexOf(quote,from); if(i<0) break;
+      var b=ft.slice(Math.max(0,i-(before||"").length), i);
+      var a=ft.slice(i+quote.length, i+quote.length+(after||"").length);
+      var score=commonSuffix(b,before||"")+commonPrefix(a,after||"");
+      if(score>bestScore){ bestScore=score; best=i; }
+      from=i+1;
+    }
+    if(best<0) return null;
+    return {start:best, end:best+quote.length};
+  }
+
+  // ---- 描述錨點在哪：最近的區塊 id、區塊標題、全頁第幾處相同文字 ----
+  // 為什麼要這個：同一句話（例如「立即預約本期名額」）全頁可能出現好幾次，
+  // 只存框選文字的話，事後看評論根本分不出對方指的是哪一顆按鈕。
+  // 這段文字「前面最近的標題」，h3 會帶上所屬 h2：「2. 為什麼這樣排 › 小節」
+  // 為什麼要這個：預覽頁的正文包在 <main id="doc"> 裡、中間沒有 section，
+  // 往上找帶 id 的容器只會找到整頁，每則評論都被標成「doc＋頁面標題」，同一個詞出現很多次時分不出是哪一處。
+  function textOf(el){ return el ? String(el.textContent||"").replace(/\s+/g," ").trim() : ""; }
+  function headingPathOf(node){
+    try{
+      var hs=contentRoot().querySelectorAll("h1,h2,h3"), last=null, lastH2=null;
+      for(var i=0;i<hs.length;i++){
+        var h=hs[i]; if(root.contains(h)) continue;
+        if(h===node || h.contains(node) || (h.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING)){
+          last=h; if(h.tagName!=="H3") lastH2=h;
+        } else break;
+      }
+      if(!last) return "";
+      var t=textOf(last);
+      if(last.tagName==="H3" && lastH2 && lastH2!==last) t=textOf(lastH2)+" › "+t;
+      return t;
+    }catch(e){ return ""; }
+  }
+  function describeAnchor(range, g){
+    var out={sectionId:null, sectionTitle:null, nth:0, total:0};
+    try{
+      var el = range.startContainer;
+      if(el && el.nodeType===3) el = el.parentNode;
+      var start = el;
+      var sec=null;
+      while(el && el!==document.body){
+        if(el.nodeType===1){
+          var tag=el.tagName;
+          if(el.id || tag==="SECTION" || tag==="NAV" || tag==="HEADER" || tag==="FOOTER"){ sec=el; break; }
+        }
+        el=el.parentNode;
+      }
+      // 找到的容器太大（就是正文本身、<main>，或裡面有兩個以上 h2）＝等於整頁，改用前面最近的標題
+      var coarse = !sec || sec===contentRoot() || sec.tagName==="MAIN" || sec.querySelectorAll("h2").length>=2;
+      var path = coarse ? headingPathOf(start) : "";
+      if(path){
+        out.sectionId = path.slice(0,80);
+      } else if(sec){
+        out.sectionId = sec.id || ("<"+sec.tagName.toLowerCase()+">");
+        var h = sec.querySelector("h1,h2,h3");
+        if(h) out.sectionTitle = (h.textContent||"").replace(/\s+/g," ").trim().slice(0,40);
+      }
+      if(g && index){
+        var ft=index.fullText, q=ft.slice(g.start,g.end), from=0, hits=[];
+        if(q){
+          while(true){ var i=ft.indexOf(q,from); if(i<0) break; hits.push(i); from=i+1; }
+          out.total=hits.length; out.nth=hits.indexOf(g.start)+1;
+        }
+      }
+    }catch(e){}
+    return out;
+  }
+  function whereText(c){
+    if(!c.sectionId) return "";
+    var t = c.sectionId;
+    if(c.sectionTitle) t += "｜" + c.sectionTitle;
+    if(c.total > 1) t += "（第 " + c.nth + "/" + c.total + " 處相同文字）";
+    return t;
+  }
+
+  // ---- 高亮重建 ----
+  function refresh(){
+    buildIndex();
+    var hl = supportsHL ? new Highlight() : null;
+    for(var i=0;i<comments.length;i++){
+      var c=comments[i]; c._range=null; c._detached=false;
+      var loc=locate(c.quote, c.contextBefore, c.contextAfter);
+      if(loc){ var r=globalToRange(loc.start,loc.end); if(r){ c._range=r; if(hl) hl.add(r); } else c._detached=true; }
+      else c._detached=true;
+    }
+    if(supportsHL) CSS.highlights.set("pc-comment", hl);
+    renderPanel();
+  }
+
+  // ---- 框選 → 浮動按鈕 ----
+  function onSelect(){
+    setTimeout(function(){
+      var sel=window.getSelection();
+      if(!sel || sel.isCollapsed || !sel.rangeCount){ hideFab(); return; }
+      var text=sel.toString();
+      if(!text.trim()){ hideFab(); return; }
+      var range=sel.getRangeAt(0);
+      if(elBar.contains(range.commonAncestorContainer) || elPanel.contains(range.commonAncestorContainer)
+         || (root.contains(range.commonAncestorContainer))){ hideFab(); return; }
+      var rect=range.getBoundingClientRect();
+      if(!rect.width && !rect.height){ hideFab(); return; }
+      pendingRange=range.cloneRange();
+      elFab.style.top=(window.scrollY+rect.bottom+6)+"px";
+      elFab.style.left=(window.scrollX+rect.left)+"px";
+      elFab.classList.add("show");
+    },10);
+  }
+  function hideFab(){ elFab.classList.remove("show"); }
+
+  function openCompose(){
+    if(!pendingRange) return;
+    var g=rangeToGlobal(pendingRange);
+    if(!g){ toast("這段選取無法定位，換一段試試"); return; }
+    var ft=index.fullText;
+    var where=describeAnchor(pendingRange, g);
+    pendingAnchor={
+      quote: ft.slice(g.start,g.end),
+      contextBefore: ft.slice(Math.max(0,g.start-32), g.start),
+      contextAfter: ft.slice(g.end, g.end+32),
+      sectionId: where.sectionId, sectionTitle: where.sectionTitle,
+      nth: where.nth, total: where.total
+    };
+    editingId=null;
+    elQuote.textContent="「"+pendingAnchor.quote+"」";
+    elWho.textContent="以 "+currentWho()+" 的身份留言";
+    elTa.value="";
+    var rect=pendingRange.getBoundingClientRect();
+    elCompose.style.top=(window.scrollY+rect.bottom+6)+"px";
+    elCompose.style.left=(window.scrollX+Math.min(rect.left, window.innerWidth-320))+"px";
+    elCompose.classList.add("show"); hideFab();
+    elTa.focus();
+  }
+  function openEdit(id){
+    var c=byId(id); if(!c) return;
+    editingId=id; pendingAnchor=null;
+    elQuote.textContent="「"+c.quote+"」";
+    elWho.textContent="編輯 "+c.author+" 的評論";
+    elTa.value=c.comment;
+    elCompose.style.top=(window.scrollY+120)+"px";
+    elCompose.style.left=(Math.max(12, window.innerWidth/2-150))+"px";
+    elCompose.classList.add("show"); elTa.focus();
+  }
+  function closeCompose(){ elCompose.classList.remove("show"); pendingAnchor=null; editingId=null; }
+
+  function saveComment(){
+    var text=elTa.value.trim(); if(!text){ elTa.focus(); return; }
+    if(editingId){
+      var c=byId(editingId); if(c){ c.comment=text; c.editedAt=Date.now(); }
+    } else if(pendingAnchor){
+      comments.push({
+        id:"c"+Date.now()+Math.floor(Math.random()*1000),
+        author:currentWho(), quote:pendingAnchor.quote,
+        contextBefore:pendingAnchor.contextBefore, contextAfter:pendingAnchor.contextAfter,
+        sectionId:pendingAnchor.sectionId, sectionTitle:pendingAnchor.sectionTitle,
+        nth:pendingAnchor.nth, total:pendingAnchor.total,
+        comment:text, createdAt:Date.now()
+      });
+    }
+    save(); closeCompose(); refresh();
+    window.getSelection().removeAllRanges();
+    // 不再自動展開側欄：留言完就留在原地，要看全部再自己按「側欄」
+    toast("已儲存，滑鼠移到該段文字可以直接看");
+  }
+  function delComment(id){
+    comments=comments.filter(function(c){ return c.id!==id; });
+    save(); refresh();
+  }
+
+  // ---- 側欄 ----
+  function renderPanel(){
+    elCount.textContent="評論 "+comments.length;
+    if(!comments.length){
+      elList.innerHTML='<div class="pc-empty">還沒有任何評論。<br>在內文框選文字就能加評論。</div>';
+      return;
+    }
+    // 依頁面區塊分組，組內保持原有時間順序
+    var order=[], groups={};
+    comments.forEach(function(c){
+      var k=c.sectionId || "__none__";
+      if(!groups[k]){ groups[k]=[]; order.push(k); }
+      groups[k].push(c);
+    });
+    var html="";
+    order.forEach(function(k){
+      var list=groups[k];
+      var label = (k==="__none__") ? "未標記位置" : k;
+      var title = "";
+      for(var i=0;i<list.length;i++){ if(list[i].sectionTitle){ title=list[i].sectionTitle; break; } }
+      var open = collapsed[k] ? " collapsed" : "";
+      html+='<div class="pc-group'+open+'" data-g="'+esc(k)+'">'
+        +'<button class="pc-ghead"><span class="pc-gcaret">▼</span>'
+        +'<span>'+esc(label)+(title?('　'+esc(title)):'')+'</span>'
+        +'<span class="pc-gn">'+list.length+'</span></button>'
+        +'<div class="pc-gbody">';
+      list.forEach(function(c){ html+=cardHtml(c); });
+      html+='</div></div>';
+    });
+    elList.innerHTML=html;
+  }
+  var collapsed={};
+  function cardHtml(c){
+    var col=colorFor(c.author);
+    var dup = (c.total>1) ? '<span class="pc-detached" style="background:#fdf6e6;color:#8a6d24">第 '+c.nth+'/'+c.total+' 處</span>' : '';
+    return '<div class="pc-card" data-id="'+c.id+'">'
+      +'<div class="pc-meta"><span class="pc-author" style="--pc-au:'+col+'">'+esc(c.author)+'</span>'
+      +'<span class="pc-time">'+fmtTime(c.createdAt)+'</span>'+dup
+      +(c._detached?'<span class="pc-detached">原文已變動</span>':'')+'</div>'
+      +'<div class="pc-cquote">'+esc(trunc(c.quote,80))+'</div>'
+      +'<div class="pc-ctext">'+esc(c.comment)+'</div>'
+      +'<div class="pc-cbtns"><button data-act="edit">編輯</button><button data-act="del">刪除</button></div>'
+      +'</div>';
+  }
+  function trunc(s,n){ s=s.replace(/\s+/g," "); return s.length>n ? s.slice(0,n)+"…" : s; }
+  function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+  function activate(id){
+    var c=byId(id); if(!c) return;
+    if(CFG.onBeforeScroll && c._range){ try{ CFG.onBeforeScroll(c._range.startContainer); }catch(e){} }
+    refresh();
+    c=byId(id);
+    if(c && c._range){
+      var rect=c._range.getBoundingClientRect();
+      if(rect.height||rect.width){
+        window.scrollTo({top:window.scrollY+rect.top-130, behavior:"smooth"});
+        flash(c._range);
+      }
+    }
+    markCurrent(id);
+    if(!elPanel.classList.contains("show")) elPanel.classList.add("show");
+  }
+  function flash(range){
+    if(!supportsHL) return;
+    var h=new Highlight(); h.add(range); CSS.highlights.set("pc-active",h);
+    setTimeout(function(){ CSS.highlights.delete("pc-active"); },1300);
+  }
+  function markCurrent(id){
+    var cards=elList.querySelectorAll(".pc-card");
+    cards.forEach(function(el){ el.classList.toggle("pc-cur", el.getAttribute("data-id")===id); });
+  }
+
+  // ---- 匯出 markdown ----
+  // 匯出時帶「位置」與「前後文」：同一句話在頁面出現很多次時，套用修改的人（或 AI）才找得到是哪一處
+  function ctxLine(before, quote, after){
+    var sq=String(quote||"").replace(/\s+/g," ");
+    if(sq.length>40) sq=sq.slice(0,40)+"…";
+    var b=String(before||"").replace(/\s+/g," ").slice(-12), a=String(after||"").replace(/\s+/g," ").slice(0,12);
+    return "…"+b+"【"+sq+"】"+a+"…";
+  }
+  // ---- 勾選確認：頁面上的 <input type=checkbox data-pv-check>（產生器把 md 的 - [ ] 轉成這個）----
+  // 一串項目要逐項決定時，直接在頁面上勾，勾選結果跟評論一起複製回來。
+  // 狀態存在同一頁的 localStorage（跟評論分開一個 key），清空評論不會清掉勾選。
+  var CHK_KEY = KEY + "__checks";
+  function loadChecks(){ try{ return JSON.parse(localStorage.getItem(CHK_KEY)||"{}"); }catch(e){ return {}; } }
+  function checkEls(){ return Array.prototype.slice.call(contentRoot().querySelectorAll('input[type="checkbox"][data-pv-check]')); }
+  function initChecks(){
+    var st=loadChecks();
+    checkEls().forEach(function(el){
+      var id=el.getAttribute("data-pv-check");
+      if(Object.prototype.hasOwnProperty.call(st,id)) el.checked=!!st[id];
+      el.addEventListener("change", function(){
+        var cur=loadChecks(); cur[id]=el.checked;
+        try{ localStorage.setItem(CHK_KEY, JSON.stringify(cur)); }catch(e){}
+      });
+    });
+  }
+  function checksMd(){
+    var els=checkEls(); if(!els.length) return "";
+    var done=els.filter(function(e){ return e.checked; }).length;
+    var out="## 勾選結果（已勾 "+done+"/"+els.length+"）\n\n", last=null;
+    els.forEach(function(el){
+      var sec=headingPathOf(el)||"未分段";
+      if(sec!==last){ out+=(last===null?"":"\n")+"### "+sec+"\n"; last=sec; }
+      var lab=el.closest("label");
+      out+="- ["+(el.checked?"x":" ")+"] "+textOf(lab||el.parentNode)+"\n";
+    });
+    return out+"\n";
+  }
+  function buildMd(){
+    var out="# 評論彙整："+(CFG.title||document.title)+"\n\n"+checksMd();
+    if(!comments.length) return out+"（目前沒有評論）\n";
+    if(checkEls().length) out+="## 評論\n\n";
+    comments.forEach(function(c,i){
+      out+="### "+(i+1)+". "+c.author+"　"+fmtTime(c.createdAt)+(c._detached?"（原文已變動）":"")+"\n";
+      var w=whereText(c); if(w) out+="（位置："+w+"）\n";
+      out+="> "+c.quote.replace(/\n/g," ")+"\n";
+      out+="前後文："+ctxLine(c.contextBefore, c.quote, c.contextAfter)+"\n\n";
+      out+=c.comment+"\n\n";
+    });
+    return out;
+  }
+  function copyAll(){
+    var md=buildMd();
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(md).then(function(){ toast("已複製到剪貼簿"); }, function(){ showCopyModal(md); });
+    } else showCopyModal(md);
+  }
+  function showCopyModal(md){
+    elModalTa.value=md; elModal.classList.add("show"); elModalTa.select();
+  }
+  var clearArmed=false, clearTimer=null;
+  function resetClear(){ clearArmed=false; clearTimeout(clearTimer);
+    var b=root.querySelector(".pc-clear"); if(b) b.textContent="清空"; }
+  function clearAll(){
+    if(!comments.length){ toast("目前沒有評論"); return; }
+    // Artifact 沙箱會擋原生 confirm，改用「再按一次」確認
+    if(!clearArmed){
+      clearArmed=true;
+      root.querySelector(".pc-clear").textContent="再按一次清空";
+      toast("再按一次「清空」就會清除全部");
+      clearTimer=setTimeout(resetClear, 4000);
+      return;
+    }
+    resetClear();
+    comments=[]; save(); refresh(); toast("已清空");
+  }
+  function toast(msg){
+    elToast.textContent=msg; elToast.classList.add("show");
+    setTimeout(function(){ elToast.classList.remove("show"); },1800);
+  }
+
+  // ---- 事件 ----
+  document.addEventListener("mouseup", onSelect);
+  document.addEventListener("selectionchange", function(){
+    if(window.matchMedia && window.matchMedia("(pointer:coarse)").matches) onSelect();
+  });
+  elFab.addEventListener("mousedown", function(e){ e.preventDefault(); });
+  elFab.addEventListener("click", openCompose);
+  root.querySelector(".pc-save").addEventListener("click", saveComment);
+  root.querySelector(".pc-cancel").addEventListener("click", closeCompose);
+  elTa.addEventListener("keydown", function(e){
+    if((e.metaKey||e.ctrlKey)&&e.key==="Enter") saveComment();
+    if(e.key==="Escape") closeCompose();
+  });
+  root.querySelector(".pc-toggle").addEventListener("click", function(){ elPanel.classList.toggle("show"); });
+  root.querySelector(".pc-x").addEventListener("click", function(){ elPanel.classList.remove("show"); });
+  root.querySelector(".pc-copy").addEventListener("click", copyAll);
+  root.querySelector(".pc-clear").addEventListener("click", clearAll);
+  root.querySelector(".pc-modal-close").addEventListener("click", function(){ elModal.classList.remove("show"); });
+  root.querySelector(".pc-modal-copy").addEventListener("click", function(){
+    elModalTa.select();
+    try{ document.execCommand("copy"); toast("已複製到剪貼簿"); }catch(e){ toast("請手動按 Cmd/Ctrl + C"); }
+  });
+  elList.addEventListener("click", function(e){
+    var gh=e.target.closest(".pc-ghead");
+    if(gh){
+      var grp=gh.parentNode, key=grp.getAttribute("data-g");
+      grp.classList.toggle("collapsed");
+      collapsed[key]=grp.classList.contains("collapsed");
+      return;
+    }
+    var card=e.target.closest(".pc-card"); if(!card) return;
+    var id=card.getAttribute("data-id");
+    var act=e.target.getAttribute("data-act");
+    if(act==="edit"){ openEdit(id); return; }
+    if(act==="del"){ delComment(id); return; }
+    activate(id);
+  });
+  // ---- 就地看評論：滑過就顯示、點一下釘住，都不會把側欄拉開 ----
+  function commentAtPoint(x,y){
+    for(var i=comments.length-1;i>=0;i--){
+      var c=comments[i]; if(!c._range) continue;
+      var rects=c._range.getClientRects();
+      for(var j=0;j<rects.length;j++){
+        var r=rects[j];
+        if(x>=r.left-2&&x<=r.right+2&&y>=r.top-2&&y<=r.bottom+2) return c;
+      }
+    }
+    return null;
+  }
+  var peekFor=null, peekPinned=false, peekTimer=null, peekRaf=0;
+  function showPeek(c,x,y,pin){
+    clearTimeout(peekTimer);
+    peekFor=c; peekPinned=!!pin;
+    var same=comments.filter(function(o){ return o!==c && o.quote===c.quote && o.contextBefore===c.contextBefore; });
+    var a=elPeek.querySelector(".pc-peek-author");
+    a.textContent=c.author; a.style.setProperty("--pc-au", colorFor(c.author));
+    elPeek.querySelector(".pc-peek-time").textContent=fmtTime(c.createdAt);
+    var w=whereText(c), elw=elPeek.querySelector(".pc-peek-where");
+    elw.textContent=w; elw.style.display=w?"":"none";
+    elPeek.querySelector(".pc-peek-q").textContent="「"+trunc(c.quote,60)+"」";
+    elPeek.querySelector(".pc-peek-body").textContent=c.comment;
+    elPeek.querySelector(".pc-peek-more").textContent=
+      same.length ? ("這一段還有 "+same.length+" 則評論") : "";
+    elPeek.classList.toggle("pinned", peekPinned);
+    elPeek.classList.add("show");
+    var pw=elPeek.offsetWidth||300, ph=elPeek.offsetHeight||120;
+    var left=Math.min(x+14, window.innerWidth-pw-10);
+    var top=y+16;
+    if(top+ph>window.innerHeight-10) top=Math.max(10, y-ph-12);
+    elPeek.style.left=Math.max(10,left)+"px";
+    elPeek.style.top=top+"px";
+  }
+  function hidePeek(){ elPeek.classList.remove("show","pinned"); peekFor=null; peekPinned=false; }
+  function scheduleHide(){ clearTimeout(peekTimer); peekTimer=setTimeout(hidePeek,220); }
+
+  document.addEventListener("mousemove", function(e){
+    if(peekPinned) return;
+    if(peekRaf) return;
+    peekRaf=requestAnimationFrame(function(){
+      peekRaf=0;
+      // 這一幀之間可能已經被點成釘住了，要再確認一次，否則會把 pinned 洗掉
+      if(peekPinned) return;
+      if(root.contains(e.target)){ return; }
+      if(elCompose.classList.contains("show")) return;
+      var c=commentAtPoint(e.clientX,e.clientY);
+      if(c){ showPeek(c,e.clientX,e.clientY,false); }
+      else if(elPeek.classList.contains("show")){ scheduleHide(); }
+    });
+  }, {passive:true});
+  elPeek.addEventListener("mouseenter", function(){ clearTimeout(peekTimer); });
+  elPeek.addEventListener("mouseleave", function(){ if(!peekPinned) scheduleHide(); });
+
+  document.addEventListener("click", function(e){
+    if(elPeek.contains(e.target)) return;
+    if(root.contains(e.target)) return;
+    if(elCompose.classList.contains("show")) return;
+    var c=commentAtPoint(e.clientX,e.clientY);
+    if(c){
+      // 被評論的文字常常本身就是連結或按鈕，點下去會跳走、卡片也跟著沒了。
+      // 這裡把這一下讓給評論，要點連結請先移開被標記的區域。
+      if(e.target.closest && e.target.closest("a,button")) e.preventDefault();
+      showPeek(c,e.clientX,e.clientY,true); markCurrent(c.id);
+    }
+    else if(peekPinned) hidePeek();
+  });
+  elPeek.addEventListener("click", function(e){
+    var b=e.target.closest("button[data-act]"); if(!b||!peekFor) return;
+    var act=b.getAttribute("data-act"), id=peekFor.id;
+    if(act==="edit"){ hidePeek(); openEdit(id); }
+    else if(act==="del"){ delComment(id); hidePeek(); }
+    else if(act==="panel"){ hidePeek(); elPanel.classList.add("show"); activate(id); }
+  });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape") hidePeek(); });
+  elPeek.querySelector(".pc-peek-close").addEventListener("click", function(e){ e.stopPropagation(); hidePeek(); });
+  window.addEventListener("scroll", function(){ if(elPeek.classList.contains("show")) hidePeek(); }, {passive:true});
+  document.addEventListener("scroll", function(){ if(elFab.classList.contains("show")) hideFab(); if(elPeek.classList.contains("show") && !peekPinned) hidePeek(); }, {passive:true});
+
+  // 多時點重錨（字體/圖片/分頁延遲載入後標記不漂）
+  var ro;
+  if(window.ResizeObserver){
+    var t; ro=new ResizeObserver(function(){ clearTimeout(t); t=setTimeout(refresh,120); });
+    ro.observe(document.body);
+  }
+  window.addEventListener("load", function(){ setTimeout(refresh,60); });
+  setTimeout(refresh,600);
+
+  // 對外 API（host 切換分頁後可呼叫 refresh）
+  window.PreviewComments={ refresh:refresh, data:function(){return comments.map(stripRuntime);}, checks:loadChecks, exportMd:buildMd };
+
+  initIdentity();
+  initChecks();
+  refresh();
+})();
+</script>

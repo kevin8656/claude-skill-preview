@@ -1,0 +1,75 @@
+/* 內容殼只引用共用設計變數，元件樣式由 components.css 提供。 */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--pv-canvas); color: var(--pv-ink); font-family: var(--pv-font-sans); font-size: var(--pv-body-size); line-height: var(--pv-body-leading); }
+.pv-layout { display: flex; align-items: flex-start; justify-content: center; gap: 24px; padding: 32px 24px 80px; }
+.pv-sheet { width: 100%; min-width: 0; max-width: var(--pv-content-w); background: var(--pv-card); border: 1px solid var(--pv-line); border-radius: var(--pv-radius); box-shadow: var(--pv-shadow); padding: 48px 80px 96px; overflow-wrap: anywhere; }
+.pv-wide .pv-sheet { max-width: var(--pv-content-w-wide); }
+/* 所有區塊同一個寬度、左右邊對齊（寬版頁一行約 47 字，跟 Notion 頁面寬度相近）。
+   避免文字與表格、流程卡各有一條左緣，插圖看起來超出對齊。 */
+#doc h1, #doc h2, #doc h3, #doc h4, #doc h5, #doc h6 { word-break: keep-all; overflow-wrap: break-word; scroll-margin-top: calc(var(--pco-bar-h, 0px) + 24px); }
+#doc h1 { font-size: var(--pv-h1-size); font-weight: var(--pv-h1-weight); letter-spacing: var(--pv-h1-tracking); line-height: var(--pv-h1-leading); margin: 0 0 16px; }
+#doc h2 { font-size: var(--pv-h2-size); font-weight: var(--pv-h2-weight); line-height: 1.4; margin: var(--pv-h2-space-above) 0 var(--pv-h2-space-below); border: 0; }
+/* 章節標記：h2 左邊掛一條深墨藍短線，掛在文字左緣外面，標題文字仍跟內文同一條左邊*/
+#doc h2 { position: relative; }
+#doc h2::before { content: ""; position: absolute; left: -18px; top: .28em; bottom: .28em; width: 5px; border-radius: 3px; background: var(--pv-accent); }
+#doc .pv-fold > summary > h2::before { display: none; }
+#doc h3 { font-size: var(--pv-h3-size); font-weight: var(--pv-h3-weight); margin: 28px 0 12px; }
+#doc p:not(.pv-flow-note) { margin: 0 0 var(--pv-para-gap); }
+/* 內文兩端對齊讓右緣切齊（內文排滿）；末行自動靠左。提示小字與流程註記不套。 */
+/* 含行內程式碼的段落不套：長路徑無法斷開時，同一行的中文會被拉出大空隙。 */
+#doc p:not(.pv-flow-note):not(.pv-hint):not(:has(code)), #doc li:not(.pv-flow-step):not(:has(code)) { text-align: justify; }
+#doc strong { font-weight: 600; }
+#doc hr { display: none; }
+#doc blockquote { margin: 20px 0; padding: 0 0 0 16px; border-left: var(--pv-quote-rule) solid var(--pv-accent); color: var(--pv-muted); background: none; }
+#doc code { font-family: var(--pv-font-mono); font-size: .88em; background: var(--pv-pill-bg); color: var(--pv-ink); border-radius: 4px; padding: 2px 5px; }
+#doc pre { max-width: 100%; overflow-x: auto; background: #F3F2EE; border: 1px solid var(--pv-line); border-radius: var(--pv-radius); padding: 16px; font-family: var(--pv-font-mono); font-size: var(--pv-code-size); line-height: 1.65; }
+#doc pre code { padding: 0; background: none; font-size: inherit; overflow-wrap: normal; }
+/* Geist Mono 預設連字會把 == 畫成一條長等號，照抄指令的人會看錯。 */
+#doc code, #doc pre { font-variant-ligatures: none; font-feature-settings: "liga" 0, "calt" 0; }
+#doc a { color: var(--pv-accent); text-underline-offset: 3px; }
+/* 流程卡片的 ol/li 是元件結構不是清單，排除在清單縮排與間距之外（否則卡片整排往右推 22px），
+   間距交給 components.css，這裡不要用高權重選擇器去蓋它。 */
+#doc ul, #doc ol:not(.pv-flow-row) { padding-left: 1.4em; }
+#doc li:not(.pv-flow-step) { margin: 6px 0; }
+/* 勾選方框（md 的 - [ ] 項目）：不顯示清單圓點，整行可點 */
+#doc li.pv-check { list-style: none; margin-left: -1.4em; }
+#doc li.pv-check label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+#doc li.pv-check input { flex: 0 0 auto; width: 18px; height: 18px; margin: 5px 0 0; accent-color: var(--pv-accent); cursor: pointer; }
+#doc li.pv-check input:checked + span { color: var(--pv-accent); font-weight: 600; }
+#doc img, #doc video, #doc svg { max-width: 100%; height: auto; }
+#doc figure.pv-figure { margin: 24px 0; }
+#doc figure.pv-figure img { display: block; width: 100%; border: 1px solid var(--pv-line); border-radius: var(--pv-radius); }
+#doc figure.pv-figure figcaption { margin-top: 8px; font-size: var(--pv-small-size); color: var(--pv-muted); text-align: center; }
+.pv-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.pv-badge { font-size: var(--pv-pill-size); color: var(--pv-muted); background: var(--pv-pill-bg); border-radius: var(--pv-radius); padding: 3px 8px; }
+#doc .pv-hint { font-size: var(--pv-small-size); color: var(--pv-muted); margin-bottom: 28px; }
+.pv-toc { flex: 0 0 260px; width: 260px; position: sticky; top: calc(var(--pco-bar-h, 0px) + 24px); max-height: calc(100dvh - var(--pco-bar-h, 0px) - 48px); overflow-y: auto; color: var(--pv-muted); }
+.pv-toc a { display: block; color: var(--pv-muted); text-decoration: none; font-size: 14px; padding: 6px 10px; border-left: 2px solid transparent; overflow-wrap: anywhere; }
+.pv-toc a.lv3 { padding-left: 22px; font-size: 13.5px; }
+.pv-toc a:hover { background: var(--pv-accent-soft); }
+.pv-toc a.active { color: var(--pv-accent); border-left-color: var(--pv-accent); }
+.pv-toc button, .pv-toc-open { font: inherit; font-size: var(--pv-small-size); color: var(--pv-muted); border: 1px solid var(--pv-line); background: var(--pv-card); border-radius: var(--pv-radius); cursor: pointer; padding: 5px 10px; }
+.pv-toc button { margin: 0 0 12px; }
+.pv-toc-open { display: none; position: fixed; top: calc(var(--pco-bar-h, 0px) + 8px); left: 12px; z-index: 9001; }
+.pv-toc-closed .pv-toc { display: none; }
+/* 寬螢幕打開評論側欄時，內容往左讓出側欄寬，不然側欄會蓋住流程卡片與表格右半。 */
+@media (min-width: 1100px) {
+  body:has(.pc-panel.show) .pv-layout, body:has(.pco-panel.show) .pv-layout { padding-right: calc(var(--pv-side-w) + 24px); }
+}
+.pv-toc-closed .pv-toc-open { display: block; }
+@media (max-width: 1099px) {
+  .pv-toc { display: none; position: fixed; left: 12px; top: calc(var(--pco-bar-h, 0px) + 48px); width: min(300px, calc(100vw - 24px)); max-height: calc(100dvh - var(--pco-bar-h, 0px) - 72px); padding: 16px; background: var(--pv-card); border: 1px solid var(--pv-line); border-radius: var(--pv-radius); box-shadow: var(--pv-shadow); z-index: 9000; }
+  /* 目錄鈕只放在頁首跟著捲走，不固定在畫面上壓住內文 */
+  .pv-toc-open { display: block; position: absolute; }
+  .pv-toc-mobile-open .pv-toc { display: block; }
+  .pv-layout { padding-top: 52px; }
+}
+@media (max-width: 640px) {
+  .pv-layout { padding: 48px 0 0; }
+  .pv-sheet { padding: 28px 20px 72px; border: 0; border-radius: 0; box-shadow: none; }
+  /* 手機標題縮小，一行多放幾個字，減少提早換行與行尾孤字 */
+  #doc h1 { font-size: 26px; line-height: 1.35; }
+  #doc h2 { font-size: 20px; }
+  #doc h2::before { left: -12px; width: 4px; }
+  #doc h3 { font-size: 16.5px; }
+}
