@@ -3,12 +3,16 @@
 
 用法：
   python3 md-to-preview.py <來源.md> <輸出.html> [--identities "我,訪客"] [--badges "a,b"] [--key storageKey] [--title 標題]
-  共用選項：--no-overlay（不含評論功能的乾淨版）、--fonts copy|link|none、--fold "3,4"、--no-lint、--icon
+  共用選項：--no-overlay（不含評論功能的乾淨版）、--fonts copy|link|none、--fold "3,4"、--no-lint、--icon、--round
+  版面：--layout auto（預設）｜sections（每個 ## 一段、自動編號）｜sheet（內文整份放一張白卡，原文審稿用；加 --no-lint 時自動選這個）
 
 設計要點：
-- 樣式全部讀檔內嵌：preview-fonts.css、preview-tokens.css、components.css、visuals.css、shell.css
+- 深藍暖米殼：樣式與互動由 convert/shell.py 讀檔內嵌，
+  順序 preview-fonts.css、preview-tokens.css、components.css、visuals.css、shell-navy.css，再加 runtime.js。
+  四種圍欄：```首屏、```題目、```待辦、```明細；`## 眉標｜結論式標題` 自動編號分段；浮動目錄與底部進度列由 runtime.js 產生。
+  舊 md 沒寫首屏時，自動用 `# 標題`、--badges 與開頭的 `> [!結論]` 組一個首屏，其餘寫法照舊。
 - 自帶字型（Noto Sans TC、Geist、Geist Mono，皆為 SIL OFL 授權），copy 模式把 woff2 放在輸出檔旁的 preview-fonts/
-- 左側可收合目錄；標題在標點與詞之間補斷行點
+- 標題在標點與詞之間補斷行點
 - ASCII／mermaid 流程圖轉流程卡片、表格在手機變卡片（convert/ 資料夾）
 - 圖像元件：```對照／架構／時間軸／數字／卡片／步驟 短語法、> [!結論] 重點框、{綠:文字} 色標、==重點==，
   由 convert/visuals.py 轉換；產頁時印「版面體檢」提醒，--no-lint 關閉
@@ -38,6 +42,7 @@ tables = _load_component('tables')
 visuals = _load_component('visuals')
 
 injector = _load_component('inject')
+shell = _load_component('shell')
 
 
 def esc(t):
@@ -81,8 +86,9 @@ def slug(text, used):
     return s
 
 
-def convert(md, fold=()):
-    """fold：要摺疊的標題層級集合（例如 {3, 4}），該層標題與其內容包成 <details>。"""
+def convert(md, fold=(), extra=None):
+    """fold：要摺疊的標題層級集合（例如 {3, 4}），該層標題與其內容包成 <details>。
+    extra：額外的圍欄處理器 (語言, 圍欄那行後面的字, 內容行) → HTML 或 None；新殼的首屏、題目、待辦、明細走這裡。"""
     lines = md.split('\n')
     out, toc = [], []
     used = set()
@@ -147,7 +153,7 @@ def convert(md, fold=()):
         ln = lines[i]
 
         # 程式碼區塊：整段原樣，不做任何 markdown 處理
-        m = re.match(r'^```(\w*)', ln)
+        m = re.match(r'^```(\w*)[ \t]*(.*)$', ln)
         if m:
             close_list(list_stack)
             lang = m.group(1)
@@ -157,7 +163,7 @@ def convert(md, fold=()):
                 buf.append(lines[i])
                 i += 1
             i += 1
-            converted = visuals.convert_block(lang, buf, inline) or flow.convert_block(lang, buf, inline)
+            converted = (extra(lang, m.group(2).strip(), buf) if extra else None) or visuals.convert_block(lang, buf, inline) or flow.convert_block(lang, buf, inline)
             out.append(converted if converted is not None else
                        f'<pre class="code" data-lang="{esc(lang)}"><code>'
                        f'{esc(chr(10).join(buf))}</code></pre>')
@@ -252,6 +258,14 @@ def convert(md, fold=()):
             cap = only_img.group(1)
             out.append(f'<figure class="pv-figure">{inline(text)}'
                        + (f'<figcaption>{esc(cap)}</figcaption>' if cap else '') + '</figure>')
+        elif re.fullmatch(r'(!\[[^\]]*\]\([^)\s]+\)\s*){2,}', text):
+            # 連續幾行只有圖片：左右並排（改前改後對照不用上下捲）
+            imgs = re.findall(r'!\[([^\]]*)\]\(([^)\s]+)\)', text)
+            cells = ''.join(
+                f'<figure class="pv-figure">{inline(f"![{c}]({u})")}'
+                + (f'<figcaption>{esc(c)}</figcaption>' if c else '') + '</figure>'
+                for c, u in imgs)
+            out.append(f'<div class="pv-figrow" style="--pv-figrow-n:{min(len(imgs), 3)}">{cells}</div>')
         else:
             out.append(f'<p>{inline(text)}</p>')
 
@@ -323,52 +337,6 @@ HEADING_SCRIPT = r"""<script>
 </script>"""
 
 
-TOC_SCRIPT = r"""<script>
-(() => {
-  const key = __TOC_KEY__;
-  const body = document.body;
-  const toc = document.querySelector('.pv-toc');
-  const open = document.querySelector('.pv-toc-open');
-  const close = toc.querySelector('button');
-  const desktop = matchMedia('(min-width:1100px)');
-  let collapsed = false;
-  try { collapsed = localStorage.getItem(key) === 'closed'; } catch (_) {}
-  function render() {
-    body.classList.toggle('pv-toc-closed', collapsed);
-    const expanded = desktop.matches ? !collapsed : body.classList.contains('pv-toc-mobile-open');
-    open.setAttribute('aria-expanded', String(expanded));
-  }
-  function toggle(value) {
-    if (desktop.matches) {
-      collapsed = !value;
-      try { localStorage.setItem(key, collapsed ? 'closed' : 'open'); } catch (_) {}
-    } else { body.classList.toggle('pv-toc-mobile-open', value); }
-    render();
-  }
-  open.addEventListener('click', () => toggle(desktop.matches || !body.classList.contains('pv-toc-mobile-open')));
-  close.addEventListener('click', () => toggle(false));
-  desktop.addEventListener('change', () => { body.classList.remove('pv-toc-mobile-open'); render(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !desktop.matches) toggle(false); });
-  const links = [...toc.querySelectorAll('a')];
-  links.forEach(a => a.addEventListener('click', () => { if (!desktop.matches) toggle(false); }));
-  if ('IntersectionObserver' in window) {
-    const io = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return;
-        links.forEach(a => {
-          const active = a.hash.slice(1) === encodeURI(entry.target.id) || decodeURIComponent(a.hash.slice(1)) === entry.target.id;
-          a.classList.toggle('active', active);
-          if (active) a.setAttribute('aria-current', 'location'); else a.removeAttribute('aria-current');
-        });
-      });
-    }, {rootMargin: '-10% 0px -80% 0px'});
-    links.forEach(a => { const target = document.getElementById(decodeURIComponent(a.hash.slice(1))); if (target) io.observe(target); });
-  }
-  render();
-})();
-</script>"""
-
-
 FOLD_SCRIPT = r"""<script>
 (() => {
   const key = __FOLD_KEY__;
@@ -424,36 +392,158 @@ FOLD_SCRIPT = r"""<script>
 </script>"""
 
 
-def make_page(body, title, badges, mode, config, toc_key, fold=False):
-    if not re.search(r'<h1\b', body, re.I):
-        body = f'<h1>{esc(title)}</h1>\n' + body
-    badge_html = '<div class="pv-badges">' + ''.join(f'<span class="pv-badge">{esc(b)}</span>' for b in badges) + '</div>' if badges else ''
-    hint = '<p class="pv-hint">框選任何一段文字就能留評論</p>' if mode != 'none' else ''
-    if fold:
-        hint += ('<div class="pv-foldbar"><button type="button" data-pv-foldall data-state="closed">全部展開</button>'
-                 '<span>各段預設收起來，點標題展開</span></div>')
-    body = re.sub(r'</h1\s*>', lambda m: m.group(0) + badge_html + hint, body, count=1, flags=re.I)
-    body, toc = rebuild_headings(body)
+# ---------- 深藍暖米殼 ----------
+NAVY_FENCES = ('首屏', '題目', '待辦', '明細')
+HERO_MARK = '<!--pv-hero-->'
+
+
+def cells(line):
+    """用全形直線分格；內容本身要寫直線時前面加反斜線。"""
+    return [c.replace('\\｜', '｜').strip() for c in re.split(r'(?<!\\)｜', line)]
+
+
+class NavyBlocks:
+    """新殼的四種圍欄。當成 convert() 的 extra 傳進去；題號與待辦編號在這裡計數，首屏另外存起來。"""
+
+    def __init__(self):
+        self.hero = None
+        self.questions = 0
+        self.todos = 0
+        self.todo_blocks = 0
+
+    def __call__(self, lang, arg, rows):
+        if lang not in NAVY_FENCES:
+            return None
+        if lang == '明細':
+            inner = convert('\n'.join(rows))[0]
+            inner = re.sub(r'<(/?)h2\b', r'<\1h4', inner)   # 明細裡的 ## 降級，免得被當成新的一段
+            return f'<details class="pv-more"><summary>{esc(arg or "看明細")}</summary><div class="pv-more-in">{inner}</div></details>'
+        rows = [r.strip() for r in rows if r.strip()]
+        if lang == '首屏':
+            self.hero = self._hero(rows)
+            return HERO_MARK
+        return self._question(rows) if lang == '題目' else self._todo(rows)
+
+    def _hero(self, rows):
+        data, asks = {}, []
+        for row in rows:
+            key, _, rest = row.partition('｜')
+            if key.strip() == '要你':
+                part = cells(rest)
+                asks.append(shell.ask(part[0], inline(part[1]) if len(part) > 1 else '', part[2] if len(part) > 2 else ''))
+            else:
+                data[key.strip()] = rest.strip()
+        return dict(h1=heading_breaks(inline(data.get('結論', ''))), tags=[data['眉標']] if data.get('眉標') else [],
+                    lead=f'<p class="pv-lead">{inline(data["補充"])}</p>' if data.get('補充') else '',
+                    asks=''.join(asks), due=inline(data['期限']) if data.get('期限') else '')
+
+    def _question(self, rows):
+        if not rows:
+            return None
+        head = cells(rows[0])
+        kind = 'many' if len(head) > 1 and '複' in head[1] else 'one'
+        hint, check_all, options = '', '', []
+        for row in rows[1:]:
+            if row.startswith('說明｜'):
+                hint = inline(row[3:])
+            elif row.startswith('全選｜'):
+                check_all = row[3:].strip()
+            else:
+                part = cells(row.lstrip('★✕ ').strip())
+                options.append(dict(label=part[0], chip=part[1] if len(part) > 2 else '', note=inline(part[-1]) if len(part) > 1 else '',
+                                    rec=row.startswith('★'), none=row.startswith('✕')))
+        self.questions += 1
+        return shell.question_card(f'q{self.questions}', f'第 {self.questions} 題', head[0], kind, options, hint, check_all)
+
+    def _todo(self, rows):
+        you, me = [], []
+        for row in rows:
+            who, _, rest = row.partition('｜')
+            part = cells(rest)
+            small = f'<small>{inline(part[1])}</small>' if len(part) > 1 else ''
+            if who.strip() == '你':
+                self.todos += 1
+                you.append(f'<li><label><input type="checkbox" data-todo="t{self.todos}" value="{shell.esc(part[0])}">'
+                           f'<span><span class="pv-opt-t">{inline(part[0])}</span>{small}</span></label></li>')
+            else:
+                me.append(f'<li>{inline(part[0])}{small}</li>')
+        self.todo_blocks += 1
+        anchor = ' id="todo"' if self.todo_blocks == 1 else ''
+        you_html = ''.join(you) or '<li>這輪沒有要你動手的事</li>'
+        return (f'<div class="pv-todo"{anchor}><div class="pv-todo-col you"><h3>要你做的（{len(you)} 件）</h3><ul>{you_html}</ul></div>'
+                f'<div class="pv-todo-col me"><h3>我在做的</h3><ul>{"".join(me)}</ul></div></div>')
+
+
+def split_lead(md):
+    """舊寫法沒有首屏時，把開頭（第一個 ## 之前）的 `> [!結論]` 拿出來放進首屏。
+    框裡有清單或勾選方框就不動它，留在原位。回傳（去掉那一框的 md，首屏用的 HTML 或空字串）。"""
+    lines = md.split('\n')
+    start = None
+    for i, ln in enumerate(lines):
+        if not ln.strip() or re.match(r'^#\s', ln):
+            continue
+        if re.match(r'^>\s*\[!結論\]', ln):
+            start = i
+        break
+    if start is None:
+        return md, ''
+    end = start
+    while end < len(lines) and lines[end].startswith('>'):
+        end += 1
+    rows = [ln.lstrip('>').strip() for ln in lines[start:end]]
+    if any(re.match(r'^(?:[-*]|\d+\.)\s', r) for r in rows[1:]):
+        return md, ''
+    head = re.sub(r'^\[!結論\]\s*', '', rows[0])
+    parts = [f'<p class="pv-lead"><strong>{inline(head)}</strong></p>'] if head else []
+    para = []
+    for r in rows[1:] + ['']:
+        if r:
+            para.append(inline(r))
+        elif para:
+            parts.append('<p class="pv-lead">' + '<br>'.join(para) + '</p>')
+            para = []
+    return '\n'.join(lines[:start] + lines[end:]), ''.join(parts)
+
+
+def make_page_navy(body, title, badges, mode, config, key, *, fold=False, hero=None, lead='', layout='sections', round_no=1, system_fonts=False):
+    """深藍暖米殼。layout：sections＝每個 ## 包成一段並自動編號；sheet＝內文整份放一張白卡（原文審稿）。"""
+    body = body.replace(HERO_MARK, '')
+    # 正文裡若留著舊殼的徽章、提示與收合列，先拿掉再重組
+    old_badges = re.search(r'<div class="pv-badges">(.*?)</div>', body, re.S)
+    if old_badges:
+        badges = badges or [plain(x) for x in re.findall(r'<span class="pv-badge">(.*?)</span>', old_badges.group(1), re.S)]
+        body = body.replace(old_badges.group(0), '', 1)
+    body = re.sub(r'<p class="pv-hint">框選任何一段文字就能留評論</p>', '', body)
+    body = re.sub(r'<div class="pv-foldbar">.*?</div>', '', body, flags=re.S)
+    first = re.search(r'<h1\b[^>]*>(.*?)</h1\s*>', body, re.S | re.I)
+    if first:   # 第一個 # 標題進首屏（有寫首屏時它只當分頁標題），正文不再重複
+        body = body[:first.start()] + body[first.end():]
+    if hero is None:
+        hero = dict(h1=heading_breaks(re.sub(r'<wbr\s*/?>', '', first.group(1), flags=re.I)) if first else esc(title), lead=lead)
+    else:
+        body = lead and (lead.replace('pv-lead', 'pv-sub') + body) or body
+    hero = dict(hero, tags=list(hero.get('tags', [])) + list(badges), compact=layout == 'sheet')
+    body, _ = rebuild_headings(body)
     wide = 'pv-table-wrap--wide' in body or 'pv-vis--wide' in body or any(int(n) >= 3 for n in re.findall(r'--pv-flow-cols:\s*(\d+)', body))
-    styles = '\n'.join(path.read_text(encoding='utf-8') for path in (
-        _components.parent.parent / 'assets' / 'preview-tokens.css',
-        _components / 'components.css', _components / 'visuals.css', _components / 'shell.css'))
-    toc_html = '\n'.join(f'<a class="lv{level}" href="#{html.escape(sid, quote=True)}">{esc(label)}</a>' for level, label, sid in toc)
-    script = TOC_SCRIPT.replace('__TOC_KEY__', json.dumps('pv_toc_' + toc_key, ensure_ascii=False).replace('<', '\\u003c'))
-    fold_script = FOLD_SCRIPT.replace('__FOLD_KEY__', json.dumps('pv_fold_' + toc_key, ensure_ascii=False).replace('<', '\\u003c')) if fold else ''
-    page = f'''<!DOCTYPE html>
-<html lang="zh-Hant"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow">
-<title>{esc(title)}</title><style>{styles}</style></head>
-<body class="{'pv-wide' if wide else ''}">
-<button class="pv-toc-open" aria-controls="pv-toc" aria-expanded="false">目錄</button>
-<div class="pv-layout"><nav id="pv-toc" class="pv-toc" aria-label="文件目錄">
-<button type="button">收合目錄</button>{toc_html}</nav>
-<article class="pv-sheet"><main id="doc">{body}</main></article></div>
-{HEADING_SCRIPT}
-{script}
-{fold_script}</body></html>'''
+    foldbar = ('<div class="pv-foldbar"><button type="button" data-pv-foldall data-state="closed">全部展開</button>'
+               '<span>各段預設收起來，點標題展開</span></div>') if fold else ''
+    if layout == 'sheet' or not re.search(r'<h2\b', body):
+        main = shell.hero(**hero) + foldbar + (f'<article class="pv-paper">{body}</article>' if body.strip() else '')
+    else:
+        parts = re.split(r'(?=<h2\b)', body)
+        sections = []
+        for n, chunk in enumerate(parts[1:], 1):
+            m = re.match(r'<h2\b([^>]*)>(.*?)</h2\s*>', chunk, re.S)
+            sid = re.search(r'id="([^"]*)"', m.group(1))
+            label, sep, headline = m.group(2).partition('｜')
+            if not sep:
+                label, headline = '', m.group(2)
+            sections.append(shell.section(html.unescape(sid.group(1)) if sid else f'sec-{n}', f'{n:02d}', plain(label).strip(), headline.strip(), chunk[m.end():]))
+        main = (shell.hero(**hero) + foldbar + (f'<div class="pv-pre">{parts[0]}</div>' if parts[0].strip() else '') + ''.join(sections))
+    if mode != 'none':
+        main += '<p class="pv-foot">任何一段文字都能框選留評論。要跳到別段，按下方的「目錄」。</p>'
+    fold_script = FOLD_SCRIPT.replace('__FOLD_KEY__', json.dumps('pv_fold_' + key, ensure_ascii=False).replace('<', '\\u003c')) if fold else ''
+    page = shell.page(title, key, main, round_no=round_no, system_fonts=system_fonts, wide=wide, scripts=HEADING_SCRIPT + '\n' + fold_script)
     return injector.inject(page, mode=mode, config=config)
 
 
@@ -468,6 +558,9 @@ def main(argv=None):
     parser.add_argument('--icon', help='分頁小圖示上的字或 emoji（預設取標題第一個字）')
     parser.add_argument('--no-lint', action='store_true', help='不印版面體檢（合約、完稿這類不能改寫的原文用）')
     parser.add_argument('--fold', help='要摺疊的標題層級，逗號分隔（例 "3,4"）；長頁專用，預設不摺')
+    parser.add_argument('--layout', choices=('auto', 'sections', 'sheet'), default='auto',
+                        help='版面：sections＝每個 ## 一段；sheet＝內文整份放一張白卡（原文審稿）。auto：加了 --no-lint 或摺疊 ## 時用 sheet')
+    parser.add_argument('--round', type=int, default=1, help='第幾輪審稿，寫進匯出的機器碼（預設 1）')
     args = parser.parse_args(argv)
     src, dst = Path(args.source), Path(args.output)
     fold_levels = {int(x) for x in (args.fold or '').replace('h', '').split(',') if x.strip()}
@@ -475,7 +568,9 @@ def main(argv=None):
         if src.resolve() == dst.resolve() or (dst.exists() and os.path.samefile(src, dst)):
             raise ValueError('輸入與輸出不可使用相同路徑')
         source = src.read_text(encoding='utf-8')
-        body, _ = convert(source, fold=fold_levels)
+        blocks = NavyBlocks()
+        text, lead = split_lead(source)
+        body, _ = convert(text, fold=fold_levels, extra=blocks)
         notes = [] if args.no_lint else visuals.lint(source)
         first = re.search(r'^#\s+(.+)$', source, re.M)
         title = args.title or (plain(inline(first.group(1))) if first else src.stem)
@@ -487,7 +582,12 @@ def main(argv=None):
             raise ValueError('身份清單不可為空')
         mode = 'none' if args.no_overlay else 'local'
         badges = [s.strip() for s in (args.badges or '').split(',') if s.strip()]
-        page = make_page(body, title, badges, mode, config, key, fold=bool(fold_levels))
+        layout = args.layout
+        if layout == 'auto':
+            asks = blocks.questions or blocks.todos
+            layout = 'sheet' if (args.no_lint or 2 in fold_levels) and not asks else 'sections'
+        page = make_page_navy(body, title, badges, mode, config, key, fold=bool(fold_levels), hero=blocks.hero,
+                              lead=lead, layout=layout, round_no=args.round, system_fonts=args.fonts == 'none')
         dst.parent.mkdir(parents=True, exist_ok=True)
         page = injector.ensure_fonts(page, dst, args.fonts)
         page = injector.ensure_favicon(page, title=title, icon=args.icon)

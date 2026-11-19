@@ -263,9 +263,11 @@ def lint(md):
         fence = re.match(r'^```(\w*)', line)
         if fence:
             if not in_fence:
-                in_fence, fence_visual = True, (fence[1] in ALL_LANGS or fence[1] in ('', 'text', 'txt', 'flow', 'mermaid'))
+                in_fence, fence_visual = True, (fence[1] in ALL_LANGS or fence[1] in ('', 'text', 'txt', 'flow', 'mermaid', '首屏', '題目', '待辦'))
                 if fence_visual:
                     current[2] += 1
+                if fence[1] == '首屏':   # 新殼的首屏就是開頭的結論
+                    has_lead_callout = True
             else:
                 in_fence = False
             continue
@@ -314,7 +316,7 @@ def lint(md):
     total = sum(section[1] for section in sections)
     visuals = sum(section[2] for section in sections)
     if total >= 300 and not has_lead_callout:
-        warnings.append('開頭沒有結論框：第一屏先用「> [!結論]」講完整件事，再往下展開')
+        warnings.append('開頭沒有結論框：最前面用「```首屏」寫一句話結論、要讀者做的事、期限（舊寫法「> [!結論]」也算）')
     for title, chars, count in sections:
         if chars >= 350 and count == 0:
             warnings.append(f'「{title}」這段 {chars} 字全是文字：挑一個圖像元件（對照、架構、時間軸、步驟、卡片、表格）取代大部分敘述')

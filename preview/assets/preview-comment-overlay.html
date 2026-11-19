@@ -648,9 +648,13 @@
     return out+"\n";
   }
   function buildMd(){
-    var out="# 評論彙整："+(CFG.title||document.title)+"\n\n"+checksMd();
+    // 頁面自己的作答（題目卡、單選題、意見欄）要跟評論一起複製。
+    // 頁面自己定義 window.previewExtraMd()，回傳要放在最前面的 markdown（例如單選題結果）。
+    var extra=""; try{ if(typeof window.previewExtraMd==="function") extra=String(window.previewExtraMd()||""); }catch(e){}
+    if(extra && !/\n$/.test(extra)) extra+="\n";
+    var out="# 評論彙整："+(CFG.title||document.title)+"\n\n"+(extra?extra+"\n":"")+checksMd();
     if(!comments.length) return out+"（目前沒有評論）\n";
-    if(checkEls().length) out+="## 評論\n\n";
+    if(checkEls().length||extra) out+="## 評論\n\n";
     comments.forEach(function(c,i){
       out+="### "+(i+1)+". "+c.author+"　"+fmtTime(c.createdAt)+(c._detached?"（原文已變動）":"")+"\n";
       var w=whereText(c); if(w) out+="（位置："+w+"）\n";

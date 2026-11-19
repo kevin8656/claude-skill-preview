@@ -1,0 +1,300 @@
+/* shell-navy.css：深藍暖米殼與新元件（預設的樣式）。
+   由 shell.py 讀檔內嵌進 md-to-preview.py 產的頁，不要手抄。
+   排在 preview-tokens.css、components.css、visuals.css 之後，同名變數蓋掉舊值，
+   舊元件（對照、步驟、數字、卡片、重點框、表格）不用改 HTML 就換成新配色。
+   規則照舊：禁外部字型、禁 text-wrap:pretty、標題 word-break:keep-all、黏頂元件的 top 引用 --pco-bar-h。
+   疊放順序：進度列 30、浮動目錄鈕 36、目錄浮層 38，都低於評論工具列 9000、評論側欄 10400、框選浮出鈕 10500。 */
+:root{
+  --pv-canvas:#f5f3ed; --pv-card:#fff; --pv-line:#e6e1d5; --pv-ink:#1e2a38; --pv-muted:#5f6b78;
+  --pv-accent:#1e3148; --pv-accent-soft:rgba(30,49,72,.07); --pv-pill-bg:#efeadb;
+  --pv-blue:#1e3148; --pv-blue-bg:#e8eef6; --pv-blue-line:#c9d5e3;
+  --pv-green:#2f7a52; --pv-green-bg:#e6f2ea; --pv-green-line:#bcd9c8;
+  --pv-amber:#a8650a; --pv-amber-bg:#fdf1dc; --pv-amber-line:#ecd9a8;
+  --pv-red:#b23b3b; --pv-red-bg:#fbe9e7; --pv-red-line:#eccdc8;
+  --pv-gray-bg:#f1eee6;
+  --pv-navy:#1e3148; --pv-navy-d:#152538; --pv-navy-m:#2a4060;
+  --pv-sand:#e8dbb8; --pv-sand-l:#faf6ea; --pv-sand-d:#8a6d2b; --pv-sand-b:#f0e4c3;
+  --pv-radius:14px; --pv-shadow:none;
+  --pv-font-sys:"PingFang TC","Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;
+  --pv-w:800px;
+}
+/* 字型兩種：只給自己看的頁可用裝置內建中文字（整頁一個檔）；給別人看的頁用自帶字型（旁邊要帶 preview-fonts/） */
+html.pv-sysfont{--pv-font-sans:var(--pv-font-sys);--pv-font-mono:ui-monospace,Menlo,Consolas,monospace}
+html.pv-webfont{--pv-font-sans:'Noto Sans TC','Geist',system-ui,sans-serif;--pv-font-mono:'Geist Mono','Noto Sans TC',ui-monospace,monospace}
+body.pv-wide{--pv-w:920px}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--pv-canvas);color:var(--pv-ink);font-family:var(--pv-font-sans,var(--pv-font-sys));font-size:16px;line-height:1.75;padding-bottom:104px}
+#doc{max-width:var(--pv-w);margin:0 auto;padding:0 16px 24px;overflow-wrap:anywhere}
+#doc h1,#doc h2,#doc h3{margin:0;line-height:1.35;word-break:keep-all;overflow-wrap:anywhere}
+#doc p{margin:10px 0 0}
+#doc a{color:var(--pv-navy);text-underline-offset:3px}
+#doc strong,#doc b{font-weight:700}
+#doc code{font-family:var(--pv-font-mono,ui-monospace,Menlo,monospace);font-size:.88em;background:var(--pv-pill-bg);border-radius:4px;padding:1px 5px}
+.pv-num{font-variant-numeric:tabular-nums}
+
+/* 一般 md 元素：舊寫法的頁（清單、引用、程式碼、勾選方框、圖片）在新殼裡照樣能看 */
+#doc h1,#doc h2,#doc h3,#doc h4,#doc h5,#doc h6{scroll-margin-top:calc(var(--pco-bar-h,0px) + 16px)}
+#doc h1{font-size:clamp(24px,3.6vw,30px)}
+#doc h4,#doc h5,#doc h6{margin:18px 0 0;font-size:15.5px;line-height:1.45;word-break:keep-all;overflow-wrap:anywhere}
+#doc hr { display: none; }
+#doc blockquote{margin:14px 0 0;padding:2px 0 2px 14px;border-left:3px solid var(--pv-sand);color:var(--pv-muted)}
+#doc blockquote>:first-child{margin-top:0}
+#doc pre{max-width:100%;overflow-x:auto;margin:14px 0 0;background:#fff;border:1px solid var(--pv-line);border-radius:12px;padding:14px;font-family:var(--pv-font-mono,ui-monospace,Menlo,monospace);font-size:13.5px;line-height:1.65}
+#doc pre code{padding:0;background:none;font-size:inherit;overflow-wrap:normal}
+#doc code,#doc pre{font-variant-ligatures:none;font-feature-settings:"liga" 0,"calt" 0}
+#doc ul,#doc ol:not(.pv-flow-row){padding-left:1.4em;margin:10px 0 0}
+#doc li:not(.pv-flow-step){margin:5px 0}
+#doc li.pv-check{list-style:none;margin-left:-1.4em}
+#doc li.pv-check label{display:flex;align-items:flex-start;gap:10px;cursor:pointer;min-height:32px}
+#doc li.pv-check input{flex:0 0 auto;width:20px;height:20px;margin:4px 0 0;accent-color:var(--pv-navy);cursor:pointer}
+#doc li.pv-check input:checked + span{color:var(--pv-navy);font-weight:700}
+#doc img,#doc video,#doc svg{max-width:100%;height:auto}
+#doc figure.pv-figure{margin:18px 0 0}
+#doc figure.pv-figure img{display:block;width:100%;border:1px solid var(--pv-line);border-radius:12px}
+#doc figure.pv-figure figcaption{margin-top:8px;font-size:13px;color:var(--pv-muted);text-align:center}
+#doc .pv-figrow{display:grid;grid-template-columns:repeat(var(--pv-figrow-n,2),minmax(0,1fr));gap:12px;margin:18px 0 0;align-items:start}
+#doc .pv-figrow figure.pv-figure{margin:0}
+@media(max-width:640px){#doc .pv-figrow{grid-template-columns:1fr}}
+
+/* 首屏：結論、要他做的事、期限，不用往下捲就知道要幹嘛 */
+.pv-hero{margin:16px 0 0;border-radius:22px;padding:clamp(22px,5vw,40px);color:#e9e2cc;
+  background:radial-gradient(120% 140% at 100% 0%,rgba(232,219,184,.16) 0,rgba(232,219,184,0) 55%),linear-gradient(135deg,var(--pv-navy-d) 0%,var(--pv-navy) 60%,var(--pv-navy-m) 100%)}
+.pv-hero .pv-tag{display:inline-block;font-size:13px;letter-spacing:.05em;border:1px solid rgba(232,219,184,.45);border-radius:999px;padding:2px 12px;color:var(--pv-sand-b)}
+#doc .pv-hero h1{margin-top:14px;font-size:clamp(25px,4.2vw,36px);color:var(--pv-sand-b)}
+#doc .pv-hero .pv-lead{margin:12px 0 0;color:#e9e2cc}
+.pv-asks{margin-top:20px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media(min-width:720px){.pv-asks{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
+#doc a.pv-ask,.pv-ask{display:block;text-decoration:none;background:rgba(232,219,184,.09);border:1px solid rgba(232,219,184,.3);border-radius:14px;padding:12px 14px;color:#f3ecd8;min-width:0}
+.pv-ask b{display:block;font-size:24px;line-height:1.25;color:#fff}
+.pv-ask span{display:block;font-size:13.5px;line-height:1.5}
+#doc .pv-due{margin:14px 0 0;font-size:14px;color:var(--pv-sand)}
+#doc .pv-hero a:not(.pv-ask){color:var(--pv-sand-b)}
+.pv-hero code{color:var(--pv-navy)}
+.pv-hero .pv-badges{display:flex;flex-wrap:wrap;gap:6px;margin:0}
+.pv-hero .pv-badge{display:inline-block;font-size:13px;letter-spacing:.05em;border:1px solid rgba(232,219,184,.45);border-radius:999px;padding:2px 12px;color:var(--pv-sand-b);background:none}
+/* 簡單版首屏：原文審稿頁與沒寫首屏的舊頁用，只放標題與一句說明 */
+.pv-hero.is-compact{padding:clamp(18px,4vw,30px)}
+#doc .pv-hero.is-compact h1{font-size:clamp(22px,3.4vw,29px)}
+/* 首屏之後、第一段之前的內容 */
+.pv-pre>:first-child{margin-top:18px}
+/* 原文審稿頁：內文一字不動，整份放在一張白卡裡 */
+.pv-paper{margin-top:18px;background:#fff;border:1px solid var(--pv-line);border-radius:16px;padding:clamp(18px,4vw,40px);overflow-wrap:anywhere}
+#doc .pv-paper>:first-child{margin-top:0}
+#doc .pv-paper p{margin:12px 0 0;line-height:1.8}
+#doc .pv-paper h2{margin-top:36px;font-size:clamp(20px,2.6vw,23px);color:var(--pv-navy)}
+#doc .pv-paper h2::before{display:none}
+#doc .pv-paper h3{margin-top:26px;font-size:17px}
+
+/* 段落：小眉標、結論式標題、一句說明 */
+.pv-sec{margin-top:clamp(34px,5vw,54px);scroll-margin-top:calc(var(--pco-bar-h,0px) + 16px)}
+.pv-eyebrow{font-size:13px;letter-spacing:.1em;color:var(--pv-sand-d);font-weight:700}
+#doc .pv-sec>h2{margin-top:2px;font-size:clamp(21px,3vw,26px);color:var(--pv-navy)}
+#doc .pv-sec>h2::before{display:none}
+#doc .pv-sec>p{color:var(--pv-ink)}
+#doc .pv-sub{margin:8px 0 0;color:var(--pv-muted)}
+#doc .pv-sec h3{font-size:17px;margin-top:22px}
+
+/* 舊元件換皮：只調外型，結構不動 */
+.pv-vis{margin:16px 0 0}
+.pv-callout{margin:14px 0 0;border-radius:12px;border-width:0 0 0 4px}
+.pv-callout--decide{border:2px solid var(--pv-navy)}
+.pv-stat{border-top:1px solid var(--pv-line);border-radius:14px}
+.pv-stat-num{color:var(--pv-navy);font-variant-numeric:tabular-nums}
+.pv-card,.pv-step{border-radius:14px}
+.pv-table-wrap{margin:16px 0 0;border-radius:14px}
+.pv-table th{background:var(--pv-sand-l)}
+
+/* 題目卡：全頁最重的框。選項整列可點，建議的那個有標記 */
+.pv-q{background:#fff;border:2px solid var(--pv-navy);border-radius:16px;padding:18px;margin-top:18px;scroll-margin-top:calc(var(--pco-bar-h,0px) + 16px)}
+.pv-q-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pv-q-n{font-size:13px;font-weight:700;color:#fff;background:var(--pv-navy);border-radius:999px;padding:2px 11px}
+.pv-q-kind{font-size:12.5px;color:var(--pv-muted)}
+.pv-q-state{margin-left:auto;font-size:12.5px;font-weight:700;color:var(--pv-amber)}
+.pv-q.is-done{border-color:var(--pv-green)}
+.pv-q.is-done .pv-q-n{background:var(--pv-green)}
+.pv-q.is-done .pv-q-state{color:var(--pv-green)}
+#doc .pv-q h3{margin-top:8px;font-size:18px}
+#doc .pv-q .pv-hint{margin:6px 0 0;font-size:14px;color:var(--pv-muted)}
+#doc .pv-opts{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:8px}
+#doc .pv-opts>li{margin:0}
+.pv-opt{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--pv-line);border-radius:12px;padding:11px 12px;cursor:pointer;font-size:15.5px;line-height:1.55;min-height:46px;background:#fff}
+.pv-opt input{margin:3px 0 0;width:20px;height:20px;accent-color:var(--pv-navy);flex:none}
+.pv-opt>span{min-width:0}
+.pv-opt:has(input:checked){border-color:var(--pv-navy);background:var(--pv-blue-bg)}
+.pv-opt:has(input:checked) .pv-opt-t{font-weight:700}
+.pv-opt small{display:block;color:var(--pv-muted);font-size:13.5px;font-weight:400}
+.pv-rec{display:inline-block;font-size:12px;font-weight:700;color:var(--pv-green);background:var(--pv-green-bg);border-radius:999px;padding:0 8px;margin-left:6px;vertical-align:1px;white-space:nowrap}
+.pv-mini{font:inherit;font-size:14px;font-weight:700;color:var(--pv-navy);background:var(--pv-sand-l);border:1px solid var(--pv-sand);border-radius:999px;padding:6px 14px;min-height:36px;cursor:pointer;margin-top:12px}
+
+/* 待辦：你的、我的分兩欄 */
+.pv-todo{display:grid;gap:12px;margin-top:16px}
+@media(min-width:720px){.pv-todo{grid-template-columns:1fr 1fr}}
+.pv-todo-col{background:#fff;border:1px solid var(--pv-line);border-radius:14px;padding:16px;min-width:0}
+.pv-todo-col.you{border-top:4px solid var(--pv-navy)}
+.pv-todo-col.me{border-top:4px solid var(--pv-sand)}
+#doc .pv-todo-col h3{margin:0;font-size:16px}
+#doc .pv-todo-col ul{list-style:none;margin:8px 0 0;padding:0}
+#doc .pv-todo-col li{margin:0;border-top:1px dashed var(--pv-line);padding:10px 0;font-size:15px;line-height:1.6}
+#doc .pv-todo-col li:first-child{border-top:0}
+.pv-todo-col label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.pv-todo-col input{margin:3px 0 0;width:20px;height:20px;accent-color:var(--pv-green);flex:none}
+.pv-todo-col small{display:block;color:var(--pv-muted);font-size:13.5px}
+.pv-todo-col label:has(input:checked) .pv-opt-t{color:var(--pv-muted);text-decoration:line-through}
+
+/* 明細：預設收起，要看才展開 */
+details.pv-more{margin-top:12px;background:#fff;border:1px solid var(--pv-line);border-radius:12px;padding:0 14px}
+details.pv-more>summary{cursor:pointer;padding:11px 0;font-weight:700;color:var(--pv-navy);font-size:15px;list-style:none;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+details.pv-more>summary::-webkit-details-marker{display:none}
+details.pv-more>summary::after{content:"展開";flex:none;font-weight:400;color:var(--pv-muted);font-size:13px}
+details.pv-more[open]>summary::after{content:"收起"}
+details.pv-more>.pv-more-in{padding:0 0 14px;font-size:15px}
+details.pv-more>.pv-more-in>:first-child{margin-top:0}
+
+/* 色標與小標籤 */
+.pv-chip{display:inline-flex;align-items:center;font-size:12.5px;font-weight:700;border-radius:999px;padding:2px 10px;background:var(--pv-gray-bg);color:var(--pv-muted);white-space:nowrap;line-height:1.6}
+.pv-chip.n{background:var(--pv-navy);color:#fff}
+.pv-chip.who{background:var(--pv-blue-bg);color:var(--pv-navy)}
+.pv-chip.must{background:var(--pv-red-bg);color:var(--pv-red)}
+.pv-chip.look{background:var(--pv-amber-bg);color:var(--pv-amber)}
+.pv-chip.ok{background:var(--pv-green-bg);color:var(--pv-green)}
+
+/* 收件人視角：一個人會依序收到什麼 */
+.pv-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+.pv-tabs button,.pv-filter button{font:inherit;font-size:14px;font-weight:700;color:var(--pv-navy);background:#fff;border:1px solid var(--pv-line);border-radius:999px;padding:6px 14px;min-height:38px;cursor:pointer}
+.pv-tabs button[aria-pressed="true"],.pv-filter button[aria-pressed="true"]{background:var(--pv-navy);color:#fff;border-color:var(--pv-navy)}
+.pv-lane{display:none;background:#fff;border:1px solid var(--pv-line);border-radius:14px;padding:6px 16px;margin-top:10px}
+.pv-lane.is-on{display:block}
+.pv-lane-day{display:grid;grid-template-columns:86px minmax(0,1fr);gap:10px;padding:10px 0;border-top:1px dashed var(--pv-line)}
+.pv-lane-day:first-child{border-top:0}
+.pv-lane-date{font-weight:700;font-size:14.5px;line-height:1.4}
+.pv-lane-date small{display:block;font-weight:700;font-size:12px;color:var(--pv-muted)}
+.pv-lane-date small.hot{color:var(--pv-amber)}
+#doc .pv-lane a{display:block;text-decoration:none;font-size:14.5px;line-height:1.5;padding:3px 0}
+.pv-lane a i{font-style:normal;color:var(--pv-muted);font-size:13px;margin-right:6px;font-variant-numeric:tabular-nums}
+
+/* 一批訊息的標頭：期限、進度、整批通過 */
+.pv-group-head{display:flex;gap:8px 10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.pv-group-count{font-size:14px;color:var(--pv-muted)}
+.pv-filter{display:flex;gap:6px;flex-wrap:wrap;margin-top:14px}
+
+/* 訊息卡：一則一卡，底下三顆大按鈕 */
+.pv-msg{background:#fff;border:1px solid var(--pv-line);border-radius:16px;padding:16px;margin-top:14px;scroll-margin-top:calc(var(--pco-bar-h,0px) + 16px)}
+.pv-msg-top{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.pv-msg-toggle{margin-left:auto;font:inherit;font-size:13px;color:var(--pv-muted);background:none;border:0;padding:4px 0 4px 8px;cursor:pointer;display:none}
+#doc .pv-msg h3{margin-top:8px;font-size:17px}
+#doc .pv-when{margin:2px 0 0;font-size:14px;color:var(--pv-muted)}
+#doc .pv-flag{margin:10px 0 0;background:var(--pv-amber-bg);border-radius:10px;padding:9px 12px;font-size:14px;line-height:1.6}
+#doc .pv-flag.must{background:var(--pv-red-bg)}
+.pv-flag b{color:var(--pv-amber)}
+.pv-flag.must b{color:var(--pv-red)}
+.pv-bubble{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:12px;background:var(--pv-sand-l);border:1px solid var(--pv-sand);border-radius:4px 16px 16px 16px;padding:13px 15px;font-size:15px;line-height:1.7;max-width:440px}
+.pv-mail{white-space:pre-wrap;overflow-wrap:anywhere;margin-top:12px;background:#fff;border:1px solid var(--pv-line);border-radius:12px;padding:13px 15px;font-size:15px;line-height:1.7;max-width:520px}
+.pv-mail-sub{display:block;font-weight:700;border-bottom:1px solid var(--pv-line);padding-bottom:8px;margin-bottom:8px;white-space:normal}
+.pv-mail-sub i{font-style:normal;font-weight:400;color:var(--pv-muted);font-size:13px;margin-right:6px}
+#doc .pv-len{margin:6px 0 0;font-size:12.5px;color:var(--pv-muted)}
+ins.pv-add{background:#cfead8;text-decoration:none;border-radius:3px;padding:0 1px}
+del.pv-del{color:var(--pv-red);background:var(--pv-red-bg);border-radius:3px;padding:0 1px}
+.pv-skip-line{display:block;color:var(--pv-muted);font-size:13px;margin:4px 0}
+.pv-act{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:14px}
+.pv-act button{font:inherit;font-size:15px;font-weight:700;min-height:46px;border-radius:12px;border:1.5px solid var(--pv-line);background:#fff;color:var(--pv-ink);cursor:pointer;padding:6px 4px}
+.pv-act button[data-act="pass"][aria-pressed="true"]{background:var(--pv-green);border-color:var(--pv-green);color:#fff}
+.pv-act button[data-act="edit"][aria-pressed="true"]{background:var(--pv-amber);border-color:var(--pv-amber);color:#fff}
+.pv-act button[data-act="skip"][aria-pressed="true"]{background:var(--pv-muted);border-color:var(--pv-muted);color:#fff}
+.pv-editbox{display:none;margin-top:10px}
+.pv-msg.is-edit .pv-editbox{display:block}
+textarea.pv-note{display:block;width:100%;font:inherit;font-size:15px;line-height:1.6;border:1px solid var(--pv-line);border-radius:10px;padding:9px 11px;min-height:66px;background:#fff;color:var(--pv-ink)}
+#doc .pv-re{margin:8px 0 0;font-size:14px;line-height:1.6;color:var(--pv-amber);font-weight:700}
+.pv-cmt{display:none}
+.pv-msg.has-cmt .pv-cmt{display:inline-flex}
+.pv-msg.is-pass{border-color:var(--pv-green-line)}
+.pv-msg.is-edit{border-color:var(--pv-amber)}
+.pv-msg.is-skip{opacity:.72}
+.pv-msg.is-pass .pv-msg-toggle,.pv-msg.is-skip .pv-msg-toggle{display:block}
+.pv-msg.is-folded .pv-msg-body{display:none}
+.pv-msg.is-folded{padding:11px 16px}
+#doc .pv-msg.is-folded h3{font-size:15px;margin-top:4px;font-weight:600}
+.pv-hide{display:none!important}
+
+/* 只換日期的同款訊息：機器比對過，跟著母稿走，不用逐則按 */
+.pv-vars{margin-top:12px;border-top:1px dashed var(--pv-line);padding-top:10px}
+.pv-vars-t{font-size:13.5px;font-weight:700;color:var(--pv-muted)}
+.pv-var{display:flex;gap:6px 8px;flex-wrap:wrap;align-items:baseline;font-size:14px;line-height:1.6;padding:5px 0}
+.pv-var-chg{color:var(--pv-muted);font-size:13.5px}
+
+/* 底部進度列：還剩幾件、跳到下一件、複製結果 */
+.pv-bar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:rgba(21,37,56,.97);color:#fff;padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.pv-bar-in{max-width:var(--pv-w);margin:0 auto;display:flex;align-items:center;gap:10px}
+.pv-bar-txt{flex:1;min-width:0;font-size:13.5px;line-height:1.35}
+.pv-bar-txt b{font-size:16px;font-variant-numeric:tabular-nums}
+.pv-meter{height:6px;border-radius:99px;background:rgba(255,255,255,.2);margin-top:6px;overflow:hidden}
+.pv-meter i{display:block;height:100%;width:0;background:var(--pv-sand);transition:width .2s}
+.pv-bar .pv-next,.pv-bar .pv-copy{flex:none;font:inherit;font-size:15px;font-weight:700;border:0;border-radius:10px;padding:8px 13px;min-height:44px;cursor:pointer}
+.pv-bar .pv-next{background:rgba(255,255,255,.16);color:#fff}
+.pv-bar .pv-copy{background:var(--pv-sand);color:var(--pv-navy)}
+.pv-toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);z-index:31;background:var(--pv-navy-d);color:#fff;font-size:14.5px;border-radius:999px;padding:8px 16px;opacity:0;pointer-events:none;transition:opacity .2s;max-width:92vw;text-align:center}
+.pv-toast.is-on{opacity:1}
+.pv-fallback{display:none;position:fixed;left:16px;right:16px;bottom:96px;z-index:32;background:#fff;border:2px solid var(--pv-navy);border-radius:14px;padding:12px}
+.pv-fallback.is-on{display:block}
+.pv-fallback textarea{display:block;width:100%;height:200px;font:13px/1.6 ui-monospace,Menlo,monospace;border:1px solid var(--pv-line);border-radius:8px;padding:8px}
+.pv-foot{margin-top:40px;font-size:13px;color:var(--pv-muted)}
+@media(max-width:480px){
+  .pv-bar{padding-left:12px;padding-right:12px}
+  .pv-bar-in{gap:8px}
+  .pv-bar .pv-next,.pv-bar .pv-copy{padding:8px 10px}
+  .pv-lane-day{grid-template-columns:74px minmax(0,1fr)}
+}
+/* 沒有題目也沒有訊息要審的頁：不放進度列 */
+body.pv-nobar{padding-bottom:88px}
+body.pv-nobar .pv-bar{display:none}
+body.pv-nobar .pv-toast,body.pv-nobar .pv-fallback{bottom:24px}
+
+/* 浮動目錄：入口是進度列最左邊的「目錄」鈕；沒有進度列的頁退成右下角浮動鈕。
+   點開是浮層（手機是從進度列上方升起的底部抽屜），不佔左欄、不擠內文，也不蓋住進度列。 */
+.pv-tocbtn{flex:none;font:inherit;font-size:15px;font-weight:700;color:#fff;background:transparent;border:1px solid rgba(255,255,255,.32);border-radius:10px;padding:8px 11px;min-height:44px;min-width:44px;cursor:pointer}
+.pv-tocbtn[aria-expanded="true"]{background:var(--pv-sand);border-color:var(--pv-sand);color:var(--pv-navy)}
+.pv-tocbtn.is-fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:36;background:rgba(21,37,56,.95);border-color:transparent;border-radius:999px;padding:8px 18px;min-height:46px;box-shadow:0 4px 14px rgba(21,37,56,.28)}
+.pv-tocbtn.is-fab[aria-expanded="true"]{background:var(--pv-sand)}
+.pv-toc{position:fixed;z-index:38;display:none;flex-direction:column;left:16px;bottom:calc(var(--pv-bar-real,0px) + 8px);width:min(340px,calc(100vw - 24px));max-height:min(70vh,calc(100dvh - var(--pco-bar-h,0px) - var(--pv-bar-real,0px) - 24px));background:#fff;color:var(--pv-ink);border:1px solid var(--pv-line);border-radius:16px;box-shadow:0 10px 34px rgba(21,37,56,.24);overflow:hidden;font-family:var(--pv-font-sans,var(--pv-font-sys))}
+.pv-toc.is-on{display:flex}
+.pv-toc-head{display:flex;align-items:center;gap:8px;padding:4px 4px 4px 16px;border-bottom:1px solid var(--pv-line)}
+.pv-toc-head b{font-size:15px}
+.pv-toc-sum{flex:1;min-width:0;font-size:13px;color:var(--pv-muted)}
+.pv-toc-x{font:inherit;font-size:14px;color:var(--pv-muted);background:none;border:0;min-width:56px;min-height:44px;cursor:pointer}
+.pv-toc-list{list-style:none;margin:0;padding:6px;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.pv-toc-list li{margin:0}
+.pv-toc-list a{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:8px;align-items:center;min-height:48px;padding:6px 10px;border-radius:10px;text-decoration:none;color:var(--pv-ink);font-size:15px;line-height:1.4;overflow-wrap:anywhere}
+.pv-toc-list a.lv3{grid-template-columns:minmax(0,1fr) auto;padding-left:44px;min-height:44px;font-size:14px;color:var(--pv-muted)}
+.pv-toc-list a[aria-current="true"]{background:var(--pv-blue-bg);font-weight:700;color:var(--pv-navy)}
+.pv-toc-n{font-size:12.5px;font-weight:700;color:var(--pv-sand-d);font-variant-numeric:tabular-nums}
+.pv-toc-t small{display:block;font-size:12px;font-weight:400;color:var(--pv-muted)}
+.pv-toc-s{font-size:12.5px;font-weight:700;white-space:nowrap;color:var(--pv-muted)}
+.pv-toc-s.todo{color:var(--pv-amber)}
+.pv-toc-s.ok{color:var(--pv-green)}
+@media(max-width:640px){
+  .pv-toc{left:0!important;right:0!important;width:auto;bottom:var(--pv-bar-real,0px)!important;border-width:1px 0 0;border-radius:18px 18px 0 0;max-height:min(60vh,calc(100dvh - var(--pco-bar-h,0px) - var(--pv-bar-real,0px) - 12px))}
+}
+/* 桌機打開評論側欄時，內文、進度列、浮動鈕都往左讓出側欄寬，不然「複製結果」會被側欄蓋住 */
+@media(min-width:1100px){
+  body:has(.pc-panel.show),body:has(.pco-panel.show){padding-right:var(--pv-side-w,360px)}
+  body:has(.pc-panel.show) .pv-bar,body:has(.pco-panel.show) .pv-bar{right:var(--pv-side-w,360px)}
+  body:has(.pc-panel.show) .pv-tocbtn.is-fab,body:has(.pco-panel.show) .pv-tocbtn.is-fab{right:calc(var(--pv-side-w,360px) + 16px)}
+}
+
+/* 選項的勾選框：單選畫成圓、複選畫成方，不用系統預設樣式，手機上比較好按 */
+.pv-opt input,.pv-todo-col input{appearance:none;-webkit-appearance:none;width:22px;height:22px;border:2px solid #98a2ae;border-radius:6px;background:#fff;margin:2px 0 0;flex:none;display:grid;place-content:center;cursor:pointer}
+.pv-q[data-kind="one"] .pv-opt input{border-radius:50%}
+.pv-opt input:checked{border-color:var(--pv-navy);background:var(--pv-navy)}
+.pv-todo-col input:checked{border-color:var(--pv-green);background:var(--pv-green)}
+.pv-opt input:checked::after,.pv-todo-col input:checked::after{content:"";width:11px;height:6px;border-left:2.5px solid #fff;border-bottom:2.5px solid #fff;transform:translateY(-1px) rotate(-45deg)}
+.pv-q[data-kind="one"] .pv-opt input:checked::after{width:9px;height:9px;border:0;border-radius:50%;background:#fff;transform:none}
+
+/* 晚一點才要發的批次：預設收起，只留一行摘要 */
+details.pv-batch{background:none;border:0;padding:0;margin-top:14px}
+details.pv-batch>summary{background:#fff;border:1px solid var(--pv-line);border-radius:12px;padding:12px 14px}
+details.pv-batch>.pv-more-in{padding:0}
+details.pv-batch>.pv-more-in>.pv-msg:first-child{margin-top:12px}
+
+/* 一人一則的私訊：先看這個人的背景，再看要發給他的字 */
+#doc .pv-ctx{margin:8px 0 0;font-size:14px;line-height:1.6;color:var(--pv-muted)}
+.pv-ctx b{color:var(--pv-ink);margin-right:6px}
